@@ -98,24 +98,15 @@ void variational_params_default(variational_params_t *params){
 }
   
 /* Compute a refinement of the optical flow (wx and wy are modified) between im1 and im2 */
-void variational(image_t *wx, image_t *wy, const color_image_t *im1, const color_image_t *im2, variational_params_t *params){
-  
-    // Check parameters
-    if(!params){
-        params = (variational_params_t*) malloc(sizeof(variational_params_t));
-        if(!params){
-          fprintf(stderr,"error: not enough memory\n");
-          exit(1);
-        }
-        variational_params_default(params);
-    }
+void variational(image_t *wx, image_t *wy, const color_image_t *im1, const color_image_t *im2, const variational_params_t *params)
+{
 
     // initialize global variables
     half_alpha = 0.5f*params->alpha;
     half_gamma_over3 = params->gamma*0.5f/3.0f;
     half_delta_over3 = params->delta*0.5f/3.0f;
-    
-    float deriv_filter[3] = {0.0f, -8.0f/12.0f, 1.0f/12.0f};
+
+    const float deriv_filter[3] = {0.0f, -8.0f/12.0f, 1.0f/12.0f};
     deriv = convolution_new(2, deriv_filter, 0);
     float deriv_filter_flow[2] = {0.0f, -0.5f};
     deriv_flow = convolution_new(1, deriv_filter_flow, 0);
