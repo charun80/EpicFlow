@@ -2,9 +2,32 @@
 #include <stdio.h>
 #include <jpeglib.h>
 #include <assert.h>
-#include <setjmp.h>
+//#include <setjmp.h>
 #include <png.h>
 #include "io.h"
+
+
+/***************** HELPER ****************/
+
+static void safeFRead( void *f_ptr, size_t f_size_us, size_t f_count_us, FILE * f_stream )
+{
+    const size_t l_numRead = fread( f_ptr, f_size_us, f_count_us, f_stream );
+
+    if ( l_numRead != f_count_us )
+    {
+        if (0 != feof( f_stream ))
+        {
+            fprintf(stderr,"Error: while reading %ld items end of file has been reached after %ld items", f_count_us, l_numRead );
+            exit(1);
+        }
+        else if ( 0 != ferror( f_stream )  )
+        {
+            perror( "Error while reading file: " );
+            exit(1);
+        }
+    }
+}
+
 
 /*********** EDGES and MATCHES ***********/
 
@@ -47,18 +70,18 @@ image_t** readFlowFile(const char* filename){
         exit(1);
     }
     float help;
-    fread(&help,sizeof(float),1,fid);
+    safeFRead(&help,sizeof(float),1,fid);
     int aXSize,aYSize;
-    fread(&aXSize,sizeof(int),1,fid);
-    fread(&aYSize,sizeof(int),1,fid);
+    safeFRead(&aXSize,sizeof(int),1,fid);
+    safeFRead(&aYSize,sizeof(int),1,fid);
     image_t** flow = (image_t**) malloc(sizeof(image_t*)*2);
     flow[0] = image_new(aXSize, aYSize);
     flow[1] = image_new(aXSize, aYSize);
     int x,y;
     for (y = 0; y < aYSize; y++)
         for (x = 0; x < aXSize ; x++) {
-            fread(&(flow[0]->data[y*flow[0]->stride+x]),sizeof(float),1,fid);
-            fread(&(flow[1]->data[y*flow[0]->stride+x]),sizeof(float),1,fid);
+            safeFRead(&(flow[0]->data[y*flow[0]->stride+x]),sizeof(float),1,fid);
+            safeFRead(&(flow[1]->data[y*flow[0]->stride+x]),sizeof(float),1,fid);
     }
     fclose(fid);
     return flow;
@@ -98,7 +121,14 @@ typedef struct{
 
 static void get_magic(FILE *fp, ppm_hdr_t *ppm_hdr){
     char str[1024];
-    fgets(str, 1024, fp);
+    const char *retStr = fgets(str, 1024, fp);
+
+    if ( NULL == retStr )
+    {
+        perror( "Error reading file: " );
+        exit(1);
+    }
+
     if(str[0] == 'P' && (str[1] <= '6' || str[1] >= '1')){
         ppm_hdr->magic = str[1] - '0';
     }
@@ -254,8 +284,8 @@ color_image_t *color_image_jpeg_load(FILE *fp){
 color_image_t *color_image_png_load( FILE* fp, const char* file_name ){
     // read the header
     png_byte header[8];
-    fread(header, 1, 8, fp);
     
+    safeFRead(header, 1, 8, fp);
     if (png_sig_cmp(header, 0, 8)){
         fprintf(stderr, "error: %s is not a PNG.\n", file_name);
         fclose(fp);
@@ -376,7 +406,7 @@ color_image_t *color_image_load(const char *fname){
         fprintf(stderr, "Error in color_image_load() - can not open file `%s' !\n", fname);
         exit(1);
     }
-    fread(magic, sizeof(char), 2, fp);
+    safeFRead(magic, sizeof(char), 2, fp);
     rewind(fp);
     if(magic_short[0] == 0xd8ff){
         image = color_image_jpeg_load(fp);
