@@ -35,7 +35,7 @@ epicflow-static: $(HEADERS) $(OBJ)
 
 
 $(TARGET_LIB): $(HEADERS) $(COMMONOBJ) $(PYLIBOBJ)
-	$(CCPP) $(CFLAGS) ${LDFLAGS} -fvisibility=hidden -shared -Wl,-soname,$(TARGET_LIB) -o $@ $^
+	$(CCPP) $(CFLAGS) -fvisibility=hidden -shared -Wl,-soname,$(TARGET_LIB) -o $@ $^  ${LDFLAGS}
 
 
 clean:
