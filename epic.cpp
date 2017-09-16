@@ -124,7 +124,7 @@ static void prefiltering( float_image *matches, const float_image *edges, const 
 
 
 /* set params to default value */
-void epic_params_default(epic_params_t* params){
+DLL_PUBLIC void epic_params_default(epic_params_t* params){
     strcpy(params->method, "LA");
     params->saliency_th = 0.045f;
     params->pref_nn = 25;

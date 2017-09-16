@@ -14,8 +14,10 @@ typedef struct epic_params_s {
     int verbose;         // verbose mode
 } epic_params_t;
 
+#define DLL_PUBLIC __attribute__ ((visibility ("default")))
+
 /* set params to default value */
-void epic_params_default(epic_params_t* params);
+extern "C" DLL_PUBLIC void epic_params_default(epic_params_t* params);
 
 
 /* main function for edge-preserving interpolation of correspondences

@@ -82,7 +82,7 @@ void compute_one_level(image_t *wx, image_t *wy, color_image_t *im1, color_image
 }
 
 /* set flow parameters to default */
-void variational_params_default(variational_params_t *params){
+DLL_PUBLIC void variational_params_default(variational_params_t *params){
     if(!params){
         fprintf(stderr,"Error optical_flow_params_default: argument is null\n");
         exit(1);
