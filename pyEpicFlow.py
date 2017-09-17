@@ -5,7 +5,7 @@ Created on Thu Sep 14 20:51:07 2017
 @author: Matthias Höffken
 """
 
-__all__ = [ "defaultVariationalParams", "defaultEpicFlowParams" ]
+__all__ = [ "defaultVariationalParams", "defaultEpicFlowParams", "sintelParams", "kittiParams", "middleburyParams" ]
 
 
 _EpicLibName = 'libctypesEpicFlow.so'
@@ -173,11 +173,11 @@ def _loadEpicFlowLibrary():
     _EpicFlowCall = eflib.computeEpicFlow
     _EpicFlowCall.restype = _EpicFlowRes    # Return type
     _EpicFlowCall.argtypes = [ ct.POINTER( _color_image_t ),          # f_inImg1_p
-                                ct.POINTER( _color_image_t ),          # f_inImg2_p
-                                ct.POINTER( _float_image_t ),          # f_edges_p
-                                ct.POINTER( _float_image_t ),          # f_matches_p
-                                ct.POINTER( _epic_params_t ),          # f_epicParams_p
-                                ct.POINTER( _variational_params_t ) ]  # f_flowParams_p
+                               ct.POINTER( _color_image_t ),          # f_inImg2_p
+                               ct.POINTER( _float_image_t ),          # f_edges_p
+                               ct.POINTER( _float_image_t ),          # f_matches_p
+                               ct.POINTER( _epic_params_t ),          # f_epicParams_p
+                               ct.POINTER( _variational_params_t ) ]  # f_flowParams_p
 
 pass
 _loadEpicFlowLibrary()
@@ -191,5 +191,55 @@ def defaultVariationalParams():
 def defaultEpicFlowParams():
     return _epic_params_t.getDefault()
 
+
+def sintelParams():
+    epicParams = defaultEpicFlowParams()
+    epicParams.pref_nn      = 25      # number of neighbors for consistent checking
+    epicParams.nn           = 160     # number of neighbors to consider for the interpolation
+    epicParams.coef_kernel  = 1.1     # coefficient in the sigmoid of the interpolation kernel
+    
+    variParams = defaultVariationalParams()
+    variParams.niter_outer  = 5       # number of outer fixed point iterations
+    variParams.alpha        = 1.0     # smoothness weight
+    variParams.gamma        = 0.72    # gradient constancy assumption weight
+    variParams.delta        = 0.0     # color constancy assumption weight
+    variParams.sigma        = 1.1     # presmoothing of the images
+    
+    return (epicParams, variParams)
+
+
+
+def kittiParams():
+    epicParams = defaultEpicFlowParams()
+    epicParams.pref_nn      = 25      # number of neighbors for consistent checking
+    epicParams.nn           = 160     # number of neighbors to consider for the interpolation
+    epicParams.coef_kernel  = 1.1     # coefficient in the sigmoid of the interpolation kernel
+    
+    variParams = defaultVariationalParams()
+    variParams.niter_outer  = 2       # number of outer fixed point iterations
+    variParams.alpha        = 1.0     # smoothness weight
+    variParams.gamma        = 0.77    # gradient constancy assumption weight
+    variParams.delta        = 0.0     # color constancy assumption weight
+    variParams.sigma        = 1.7     # presmoothing of the images
+    
+    return (epicParams, variParams)
+
+
+def middleburyParams():
+    epicParams = defaultEpicFlowParams()
+    epicParams.pref_nn      = 15      # number of neighbors for consistent checking
+    epicParams.nn           = 65      # number of neighbors to consider for the interpolation
+    epicParams.coef_kernel  = 0.2     # coefficient in the sigmoid of the interpolation kernel
+    
+    variParams = defaultVariationalParams()
+    variParams.niter_outer  = 25      # number of outer fixed point iterations
+    variParams.alpha        = 1.0     # smoothness weight
+    variParams.gamma        = 0.72    # gradient constancy assumption weight
+    variParams.delta        = 0.0     # color constancy assumption weight
+    variParams.sigma        = 1.1     # presmoothing of the images
+    
+    return (epicParams, variParams)
+    
+####################################################################################
 
 
