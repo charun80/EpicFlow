@@ -55,6 +55,7 @@ class _image_t(ct.Structure):
     def fromArray( cls, f_ndimage ):
         f_ndimage = np.ascontiguousarray( f_ndimage, dtype=np.float32 )
         
+        print f_ndimage.strides, f_ndimage.shape
         assert( f_ndimage.strides[1] == f_ndimage.itemsize )
         assert( f_ndimage.strides >= (f_ndimage.shape[0] * f_ndimage.itemsize) )
         assert( _isAligned( f_ndimage ) )       
@@ -63,17 +64,6 @@ class _image_t(ct.Structure):
         obj.m_ndImage = f_ndimage
         
         return obj
-    
-    
-    def getArray( self ):
-        assert( self.stride >= (self.width * np.float32().itemsize) )
-        assert( 0 == (self.stride % np.float32().itemsize) )
-        
-        arry = np.ctypeslib.as_array( self.data, shape=(self.height, self.stride / np.float32().itemsize) )
-        if arry.shape[1] > self.width:
-            arry = arry[:,:self.width]
-        
-        return arry
 
 
 
@@ -291,9 +281,9 @@ def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFl
     
     if fImg1.shape != fImg2.shape:
         raise IllegalEpicFlowArgumentError("Input image shapes to not match: %s != %s", str(fImg1.shape), str(fImg2.shape) )
-    elif fImg1.shape != fEdgeImg.shape:
+    elif fImg1.shape[-2:] != fEdgeImg.shape:
         raise IllegalEpicFlowArgumentError("Edge Image shape does not fit: %s != %s", str(fImg1.shape), str(fEdgeImg.shape) )
-    elif (fMatches.min() < 0) or ( fMatches[:,(0,2)].max() >= fImg1.shape[1] ) or ( fMatches[:,(1,3)].max() >= fImg1.shape[0] ):
+    elif (fMatches.min() < 0) or ( fMatches[:,(0,2)].max() >= fImg1.shape[-1] ) or ( fMatches[:,(1,3)].max() >= fImg1.shape[-2] ):
         raise IllegalEpicFlowArgumentError("Matching indices are out of range" )
     
     lImg1    = _color_image_t.fromArray( fImg1 )
@@ -312,7 +302,7 @@ def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFl
         fEpicFlowParams = defaultEpicFlowParams()
     
     # create Output Memory
-    lFlowRes = np.zeros( (2,) + fImg1.shape, dtype=np.float32 )
+    lFlowRes = np.zeros( (2,) + fImg1.shape[-2:], dtype=np.float32 )
     
     # is it sure that newly created arrays are always aligned?
     assert( _isAligned( lFlowRes ) )
