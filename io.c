@@ -34,10 +34,12 @@ static void safeFRead( void *f_ptr, size_t f_size_us, size_t f_count_us, FILE * 
 /* read edges from a binary file containing width*height float32 values */
 float_image read_edges(const char *filename, const int width, const int height){
     float_image res = empty_image(float, width, height);
+
     FILE *fid = fopen(filename, "rb");
-    assert(fread(res.pixels, sizeof(float), width*height, fid)==width*height);
+    safeFRead( res.pixels, sizeof(float),  width*height, fid );
     fclose(fid);
-    return res;   
+
+    return res;
 }
 
 /* read matches, stored as x1 y1 x2 y2 per line (other values on the same is not taking into account */
