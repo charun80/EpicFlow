@@ -549,9 +549,22 @@ image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix
     convolution_delete(deriv);
     
     // compute autocorrelation matrix
-    image_t *imxx = image_new(width, height), *imxy = image_new(width, height), *imyy = image_new(width, height);
-    v4sf *imx1p = (v4sf*) imx->c1, *imx2p = (v4sf*) imx->c2, *imx3p = (v4sf*) imx->c3, *imy1p = (v4sf*) imy->c1, *imy2p = (v4sf*) imy->c2, *imy3p = (v4sf*) imy->c3, 
-        *imxxp = (v4sf*) imxx->data, *imxyp = (v4sf*) imxy->data, *imyyp = (v4sf*) imyy->data;
+    image_t *imxx = image_new(width, height),
+            *imxy = image_new(width, height),
+            *imyy = image_new(width, height);
+
+    v4sf *imx1p = (v4sf*) imx->c1,
+         *imx2p = (v4sf*) imx->c2,
+         *imx3p = (v4sf*) imx->c3,
+
+         *imy1p = (v4sf*) imy->c1,
+         *imy2p = (v4sf*) imy->c2,
+         *imy3p = (v4sf*) imy->c3,
+
+         *imxxp = (v4sf*) imxx->data,
+         *imxyp = (v4sf*) imxy->data,
+         *imyyp = (v4sf*) imyy->data;
+
     int i;
     for(i = 0 ; i<height*im->stride/4 ; i++){
         *imxxp = (*imx1p)*(*imx1p) + (*imx2p)*(*imx2p) + (*imx3p)*(*imx3p);
