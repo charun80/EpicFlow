@@ -37,16 +37,51 @@ def _isAligned( fNdArray, fAlignedTo=16 ):
     if (0 == rest):
         return True
     
-    print fNdArray.ctypes.data
-    
     return False
 
+
+def _isRowAligned( fNdArray, fAlignedTo=16 ):
+    rowAligned = np.array( [ _isAligned( fNdArray[i,:] ) for i in xrange( fNdArray.shape[0] ) ], dtype=np.bool )
+    
+    return np.all( rowAligned )
+
+
+
+def _rowAlignedArray( (fNRows, fNCols), dtype, fConstructor=np.empty, fAlignedTo=16 ):
+    dtype = np.dtype( dtype )
+    
+    # Number of bytes in each row stride    
+    lNRowStride = ((fNCols * dtype.itemsize + fAlignedTo - 1) / fAlignedTo) * fAlignedTo
+    assert( 0 == (lNRowStride % dtype.itemsize) )
+    
+    # Creating Buffer
+    lNBytes = fNRows * lNRowStride
+    lBuf = fConstructor( lNBytes + fAlignedTo, dtype=np.uint8 )
+    
+    # Creating array
+    lStartIndex = -lBuf.ctypes.data % fAlignedTo
+    lArray = lBuf[lStartIndex:(lStartIndex+lNBytes)].view(dtype).reshape((fNRows, lNRowStride / dtype.itemsize))
+    
+    # cut overhanging part
+    if lNRowStride > fNCols:
+        lArray = lArray[:,:fNCols]
+    
+    assert( 0 == (lArray.strides[0] % fAlignedTo) )
+    assert( _isRowAligned(lArray) )
+    
+    return lArray
+
+
+def _convert2RowAlignedArray( fOrigArray, fAlignedTo=16 ):
+    nArray = _rowAlignedArray( fOrigArray.shape, fOrigArray.dtype, np.empty, fAlignedTo )
+    nArray[:,:] = fOrigArray
+    return nArray
 
 
 class _image_t(ct.Structure):
     _fields_=[("width",  ct.c_int),   # Width(cols) of the image
               ("height", ct.c_int),   # Height(rows) of the image
-              ("stride", ct.c_int),   # Width of the memory (width + padding such that it is a multiple of 4) - probably in bytes
+              ("stride", ct.c_int),   # Width of the memory (width + padding such that it is a multiple of 4) - number of elements
               ("data",   ct.POINTER(ct.c_float) ) ]  # Image data, aligned
 
     m_ndImage = None
@@ -76,42 +111,49 @@ class _color_image_t(ct.Structure):
               ("c2",   ct.POINTER(ct.c_float) ),  # Color 2, aligned
               ("c3",   ct.POINTER(ct.c_float) )]  # Color 3, aligned
     
-    m_ndImage = None
+    c1array = None
+    c2array = None
+    c3array = None
     
     
     @classmethod
     def fromArray( cls, f_ndimage ):
         
         if f_ndimage.ndim > 3:
-            pass
+            raise ValueError( "unhandable image with shape %s" % str( f_ndimage.shape ) )
         elif 3 == f_ndimage.ndim:
-            if 3 != f_ndimage.shape[2]:
-                f_ndimage = f_ndimage.swapaxes( 0, 2 )
+            if 3 != f_ndimage.shape[0]:
+                f_ndimage = f_ndimage.transpose((2,0,1))
         
-        f_ndimage = np.ascontiguousarray( f_ndimage, dtype=np.float32 )
-        assert( f_ndimage.strides[-1] == f_ndimage.itemsize )
+        f_ndimage = np.asarray( f_ndimage, dtype=np.float32 )
         
         if f_ndimage.ndim == 2:
             # one channel (gray) image
-            c1 = f_ndimage
-            c2 = f_ndimage
-            c3 = f_ndimage
+            if _isRowAligned( f_ndimage ):
+                c1 = f_ndimage
+            else:
+                c1 = _convert2RowAlignedArray( f_ndimage )
+            c2 = c1
+            c3 = c1
         elif f_ndimage.ndim == 3:
             # color image
             c1 = f_ndimage[0,:,:]
             c2 = f_ndimage[1,:,:]
             c3 = f_ndimage[2,:,:]
+            if not _isRowAligned( c1 ):
+                c1 = _convert2RowAlignedArray( c1 )
+                c2 = _convert2RowAlignedArray( c2 )
+                c3 = _convert2RowAlignedArray( c3 )
         
         assert( c1.strides[1] == f_ndimage.itemsize )
-        assert( _isAligned( c1 ) )
-        assert( _isAligned( c2 ) )
-        assert( _isAligned( c3 ) )
         
-        obj = cls( c1.shape[1], c1.shape[0], c1.strides[1], 
-                   _ndarray2pointer( c1 ), 
-                   _ndarray2pointer( c2 ),
-                   _ndarray2pointer( c3 ) )
-        obj.m_ndImage = f_ndimage
+        obj = cls( c1.shape[1], c1.shape[0], c1.strides[0] / f_ndimage.itemsize, 
+                   c1.ctypes.data_as(_floatPtr),
+                   c2.ctypes.data_as(_floatPtr),
+                   c3.ctypes.data_as(_floatPtr) )
+        obj.c1array = c1
+        obj.c2array = c2
+        obj.c3array = c3
         
         return obj
 
