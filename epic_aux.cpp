@@ -284,7 +284,7 @@ static void ngh_labels_to_spmat( int ns, int_image* labels, float_image* dmap,  
 
 /* Compute the neighboring matrix between seeds as well as the closest seed for each pixel */
 static void distance_transform_and_graph( const int_image* seeds,  const float_image* cost, dt_params_t* dt_params,
-                                int_image* labels, float_image* dmap, csr_matrix* ngh, int n_thread ) {
+                                          int_image* labels, float_image* dmap, csr_matrix* ngh ) {
   const int tx = cost->tx;
   const int ty = cost->ty;
   assert(seeds->tx==2);
@@ -337,13 +337,13 @@ void dist_trf_nnfield_subset( int_image* best, float_image* dist, int_image *lab
   const int nn = best->tx;
   assert(dist->tx==nn);
   
-  float_image dmap = {0};
+  float_image dmap = {NULL,0,0};
   int_image  nnf = {NEWA(int,ns*nn),nn,ns};
   float_image dis = {NEWA(float,ns*nn),nn,ns};
 
   // compute distance transform and build graph
-  csr_matrix ngh = {0};
-  distance_transform_and_graph( seeds,  cost, dt_params, labels, &dmap, &ngh, n_thread );
+  csr_matrix ngh = {NULL,NULL,NULL,0,0};
+  distance_transform_and_graph( seeds,  cost, dt_params, labels, &dmap, &ngh );
   
   // compute nearest neighbors using the graph
   #ifdef USE_OPENMP
