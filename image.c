@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <malloc.h>
 #include <math.h>
 
 #include "image.h"
@@ -21,9 +20,12 @@ image_t *image_new(const int width, const int height){
     image->width = width;
     image->height = height;  
     image->stride = ( (width+3) / 4 ) * 4;
-    image->data = (float*) memalign(16, image->stride*height*sizeof(float));
-    if(image->data == NULL){
-        fprintf(stderr, "Error: image_new() - not enough memory !\n");
+    
+    const int lMemAlignError = posix_memalign( (void**)(&(image->data)), 16, image->stride * height * sizeof(float) );
+    
+    if( 0 != lMemAlignError )
+    {
+        fprintf( stderr, "Error: allocating memory in image_new(): %d !\n", lMemAlignError );
         exit(1);
     }
     return image;
@@ -65,7 +67,8 @@ void image_delete(image_t *image){
 
 
 /* allocate a new color image of size width x height */
-color_image_t *color_image_new(const int width, const int height){
+color_image_t *color_image_new(const int width, const int height)
+{
     color_image_t *image = (color_image_t*) malloc(sizeof(color_image_t));
     if(image == NULL){
         fprintf(stderr, "Error: color_image_new() - not enough memory !\n");
@@ -74,9 +77,11 @@ color_image_t *color_image_new(const int width, const int height){
     image->width = width;
     image->height = height;  
     image->stride = ( (width+3) / 4 ) * 4;
-    image->c1 = (float*) memalign(16, 3*image->stride*height*sizeof(float));
-    if(image->c1 == NULL){
-        fprintf(stderr, "Error: color_image_new() - not enough memory !\n");
+    const int lMemAlignError = posix_memalign( (void**)(&(image->c1)), 16, 3 * image->stride * height * sizeof(float) );
+    
+    if( 0 != lMemAlignError )
+    {
+        fprintf(stderr, "Error: allocating memory in color_image_new(): %d !\n", lMemAlignError);
         exit(1);
     }
     image->c2 =  image->c1+image->stride*height;

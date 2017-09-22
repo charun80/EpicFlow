@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <malloc.h>
 
 #include "variational.h"
 #include "variational_aux.h"
