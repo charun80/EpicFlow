@@ -41,30 +41,34 @@ def _isAligned( fNdArray, fAlignedTo=16 ):
 
 
 def _isRowAligned( fNdArray, fAlignedTo=16 ):
-    rowAligned = np.array( [ _isAligned( fNdArray[i,:] ) for i in xrange( fNdArray.shape[0] ) ], dtype=np.bool )
+    lNRows = np.prod( fNdArray.shape[:-1] )
+    fNdArray = fNdArray.reshape( (lNRows, fNdArray.shape[-1] ) )
+    rowAligned = np.array( [ _isAligned( fNdArray[i,:] ) for i in xrange( lNRows ) ], dtype=np.bool )
     
     return np.all( rowAligned )
 
 
 
-def _rowAlignedArray( (fNRows, fNCols), dtype, fConstructor=np.empty, fAlignedTo=16 ):
+def _rowAlignedArray( shape, dtype, fConstructor=np.empty, fAlignedTo=16 ):
+    lNCols = shape[-1]
     dtype = np.dtype( dtype )
     
     # Number of bytes in each row stride    
-    lNRowStride = ((fNCols * dtype.itemsize + fAlignedTo - 1) / fAlignedTo) * fAlignedTo
+    lNRowStride = ((lNCols * dtype.itemsize + fAlignedTo - 1) / fAlignedTo) * fAlignedTo
     assert( 0 == (lNRowStride % dtype.itemsize) )
     
     # Creating Buffer
-    lNBytes = fNRows * lNRowStride
+    lNBytes = np.prod(shape[:-1]) * lNRowStride
     lBuf = fConstructor( lNBytes + fAlignedTo, dtype=np.uint8 )
     
     # Creating array
     lStartIndex = -lBuf.ctypes.data % fAlignedTo
-    lArray = lBuf[lStartIndex:(lStartIndex+lNBytes)].view(dtype).reshape((fNRows, lNRowStride / dtype.itemsize))
+    lArray = lBuf[lStartIndex:(lStartIndex+lNBytes)].view(dtype).reshape( shape[:-1] + (lNRowStride / dtype.itemsize,))
     
     # cut overhanging part
-    if lNRowStride > fNCols:
-        lArray = lArray[:,:fNCols]
+    if lNRowStride > lNCols:
+        lSlice = ((len(shape) - 1) * (slice(None),)) + (slice(None,lNCols),)
+        lArray = lArray[lSlice]
     
     assert( 0 == (lArray.strides[0] % fAlignedTo) )
     assert( _isRowAligned(lArray) )
@@ -74,7 +78,7 @@ def _rowAlignedArray( (fNRows, fNCols), dtype, fConstructor=np.empty, fAlignedTo
 
 def _convert2RowAlignedArray( fOrigArray, fAlignedTo=16 ):
     nArray = _rowAlignedArray( fOrigArray.shape, fOrigArray.dtype, np.empty, fAlignedTo )
-    nArray[:,:] = fOrigArray
+    nArray[:] = fOrigArray[:]
     return nArray
 
 
@@ -111,9 +115,7 @@ class _color_image_t(ct.Structure):
               ("c2",   ct.POINTER(ct.c_float) ),  # Color 2, aligned
               ("c3",   ct.POINTER(ct.c_float) )]  # Color 3, aligned
     
-    c1array = None
-    c2array = None
-    c3array = None
+    m_ndimage = None
     
     
     @classmethod
@@ -137,13 +139,12 @@ class _color_image_t(ct.Structure):
             c3 = c1
         elif f_ndimage.ndim == 3:
             # color image
+            if not _isRowAligned( f_ndimage ):
+                f_ndimage = _convert2RowAlignedArray( f_ndimage )
             c1 = f_ndimage[0,:,:]
             c2 = f_ndimage[1,:,:]
             c3 = f_ndimage[2,:,:]
-            if not _isRowAligned( c1 ):
-                c1 = _convert2RowAlignedArray( c1 )
-                c2 = _convert2RowAlignedArray( c2 )
-                c3 = _convert2RowAlignedArray( c3 )
+            
         
         assert( c1.strides[1] == f_ndimage.itemsize )
         
@@ -151,9 +152,8 @@ class _color_image_t(ct.Structure):
                    c1.ctypes.data_as(_floatPtr),
                    c2.ctypes.data_as(_floatPtr),
                    c3.ctypes.data_as(_floatPtr) )
-        obj.c1array = c1
-        obj.c2array = c2
-        obj.c3array = c3
+        
+        obj.m_ndimage = f_ndimage
         
         return obj
 
