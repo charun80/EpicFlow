@@ -428,8 +428,8 @@ void apply_nadarayawatson(float_image *newvects, const float_image *seedsvects, 
 void fit_localaffine(float_image *res, const int_image *nnf, const float_image *dis, const int_image *seeds, const float_image *vects){
     const int nn = nnf->tx;
     {
-        float *mat = NEWA(float, 12*(nn+4));
-        float *vec = NEWA(float, 2*(nn+4));
+        float mat[12*(nn+4)];
+        float vec[2*(nn+4)];
         for(int i = 0 ; i<nnf->ty ; i++){
             memset(mat, 0, sizeof(float)*12*(nn+4));  
             float coefi=0.0f, *m = mat, *v = vec, *dist = dis->pixels + i*nn;
@@ -452,20 +452,19 @@ void fit_localaffine(float_image *res, const int_image *nnf, const float_image *
                float work_sz;
                sgels_((char*) "Transposed", &mm, &n, &nrhs, mat, &lda, 
                    vec, &ldb, &work_sz, &lwork, &info); 
-               float *work;    
-               lwork=(int)work_sz;
-               work=NEWA(float,lwork);
+               
+               lwork = (int)work_sz;
+               float work[lwork];
+
                sgels_((char*) "Transposed", &mm, &n, &nrhs, mat, &lda, 
                    vec, &ldb, work, &lwork, &info); 
-               free(work);
+
                assert(info>=0); /* there is always a result for coherent input */
             } 
             float *aff = &res->pixels[6*i];
             aff[0]=vec[0]; aff[1]=vec[1]; aff[2]=vec[4];
             aff[3]=vec[2]; aff[4]=vec[3]; aff[5]=vec[5];
         }
-        free(mat);
-        free(vec); 
     }
 }
 
