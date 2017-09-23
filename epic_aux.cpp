@@ -48,7 +48,7 @@ static int find_nn_graph_arr( csr_matrix* graph, int seed, int nmax, int* best, 
     const int* indptr = graph->indptr;
 
     // init done to INF
-    float* done = NEWA(float,graph->nr);
+    float done[graph->nr];
     memset(done,0x7F,graph->nr*sizeof(float));
   
     // explore nodes in order of increasing distances
@@ -77,8 +77,6 @@ static int find_nn_graph_arr( csr_matrix* graph, int seed, int nmax, int* best, 
             done[neigh] = newd;
         }
     }
-  
-    free(done);
 
     // in case we do not get enough results
     memset(best+n,0xFF,(nmax-n)*sizeof(int));
