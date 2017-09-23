@@ -82,6 +82,11 @@ def _convert2RowAlignedArray( fOrigArray, fAlignedTo=16 ):
     return nArray
 
 
+
+####################################################################################
+
+
+
 class _image_t(ct.Structure):
     _fields_=[("width",  ct.c_int),   # Width(cols) of the image
               ("height", ct.c_int),   # Height(rows) of the image
@@ -90,16 +95,22 @@ class _image_t(ct.Structure):
 
     m_ndImage = None
     
+    
     @classmethod
     def fromArray( cls, f_ndimage ):
-        f_ndimage = np.ascontiguousarray( f_ndimage, dtype=np.float32 )
+        f_ndimage = np.asarray( f_ndimage, dtype=np.float32 )
+        
+        if not _isRowAligned( f_ndimage ):
+            f_ndimage = _convert2RowAlignedArray( f_ndimage )
         
         print f_ndimage.strides, f_ndimage.shape
         assert( f_ndimage.strides[1] == f_ndimage.itemsize )
-        assert( f_ndimage.strides >= (f_ndimage.shape[0] * f_ndimage.itemsize) )
-        assert( _isAligned( f_ndimage ) )       
+        assert( f_ndimage.strides[0] >= (f_ndimage.shape[1] * f_ndimage.itemsize) )
+        assert( 0 == (f_ndimage.strides[0] % f_ndimage.itemsize) )
+        assert( _isRowAligned( f_ndimage ) )       
         
-        obj = cls( f_ndimage.shape[1], f_ndimage.shape[0], f_ndimage.strides[1], _ndarray2pointer( f_ndimage ) )
+        obj = cls( f_ndimage.shape[1], f_ndimage.shape[0], f_ndimage.strides[0] / f_ndimage.itemsize, 
+                   f_ndimage.ctypes.data_as(_floatPtr ) )
         obj.m_ndImage = f_ndimage
         
         return obj
@@ -344,16 +355,18 @@ def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFl
         fEpicFlowParams = defaultEpicFlowParams()
     
     # create Output Memory
-    lFlowRes = np.zeros( (2,) + fImg1.shape[-2:], dtype=np.float32 )
+    lFlowRes = _rowAlignedArray( (2,) + fImg1.shape[-2:], dtype=np.float32, fConstructor=np.zeros )
     
     # is it sure that newly created arrays are always aligned?
-    assert( _isAligned( lFlowRes ) )
+    assert( _isRowAligned( lFlowRes ) )
     
     lResWx = _image_t.fromArray( lFlowRes[0,:,:] )
     lResWy = _image_t.fromArray( lFlowRes[1,:,:] )
     
     assert( _memId( lResWx.m_ndImage ) == _memId( lFlowRes[0,:,:] ) )
+    assert( _isRowAligned( lResWx.m_ndImage ) )
     assert( _memId( lResWy.m_ndImage ) == _memId( lFlowRes[1,:,:] ) )
+    assert( _isRowAligned( lResWx.m_ndImage ) )
     
     
     # function call
