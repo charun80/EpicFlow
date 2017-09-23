@@ -5,6 +5,8 @@ Created on Thu Sep 14 20:51:07 2017
 @author: Matthias Höffken
 """
 
+from __future__ import print_function
+
 __all__ = [ "computeEpicFlow", "IllegalEpicFlowArgumentError", \
             "defaultVariationalParams", "defaultEpicFlowParams", \
             "sintelParams", "kittiParams", "middleburyParams" ]
@@ -102,8 +104,7 @@ class _image_t(ct.Structure):
         
         if not _isRowAligned( f_ndimage ):
             f_ndimage = _convert2RowAlignedArray( f_ndimage )
-        
-        print f_ndimage.strides, f_ndimage.shape
+
         assert( f_ndimage.strides[1] == f_ndimage.itemsize )
         assert( f_ndimage.strides[0] >= (f_ndimage.shape[1] * f_ndimage.itemsize) )
         assert( 0 == (f_ndimage.strides[0] % f_ndimage.itemsize) )
