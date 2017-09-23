@@ -48,7 +48,7 @@ static int find_nn_graph_arr( csr_matrix* graph, int seed, int nmax, int* best, 
     const int* indptr = graph->indptr;
 
     // init done to INF
-    float* done = NEWA(float,graph->nr);
+    float done[graph->nr];
     memset(done,0x7F,graph->nr*sizeof(float));
   
     // explore nodes in order of increasing distances
@@ -77,8 +77,6 @@ static int find_nn_graph_arr( csr_matrix* graph, int seed, int nmax, int* best, 
             done[neigh] = newd;
         }
     }
-  
-    free(done);
 
     // in case we do not get enough results
     memset(best+n,0xFF,(nmax-n)*sizeof(int));
@@ -284,7 +282,7 @@ static void ngh_labels_to_spmat( int ns, int_image* labels, float_image* dmap,  
 
 /* Compute the neighboring matrix between seeds as well as the closest seed for each pixel */
 static void distance_transform_and_graph( const int_image* seeds,  const float_image* cost, dt_params_t* dt_params,
-                                int_image* labels, float_image* dmap, csr_matrix* ngh, int n_thread ) {
+                                          int_image* labels, float_image* dmap, csr_matrix* ngh ) {
   const int tx = cost->tx;
   const int ty = cost->ty;
   assert(seeds->tx==2);
@@ -337,13 +335,13 @@ void dist_trf_nnfield_subset( int_image* best, float_image* dist, int_image *lab
   const int nn = best->tx;
   assert(dist->tx==nn);
   
-  float_image dmap = {0};
+  float_image dmap = {NULL,0,0};
   int_image  nnf = {NEWA(int,ns*nn),nn,ns};
   float_image dis = {NEWA(float,ns*nn),nn,ns};
 
   // compute distance transform and build graph
-  csr_matrix ngh = {0};
-  distance_transform_and_graph( seeds,  cost, dt_params, labels, &dmap, &ngh, n_thread );
+  csr_matrix ngh = {NULL,NULL,NULL,0,0};
+  distance_transform_and_graph( seeds,  cost, dt_params, labels, &dmap, &ngh );
   
   // compute nearest neighbors using the graph
   #ifdef USE_OPENMP
@@ -430,8 +428,8 @@ void apply_nadarayawatson(float_image *newvects, const float_image *seedsvects, 
 void fit_localaffine(float_image *res, const int_image *nnf, const float_image *dis, const int_image *seeds, const float_image *vects){
     const int nn = nnf->tx;
     {
-        float *mat = NEWA(float, 12*(nn+4));
-        float *vec = NEWA(float, 2*(nn+4));
+        float mat[12*(nn+4)];
+        float vec[2*(nn+4)];
         for(int i = 0 ; i<nnf->ty ; i++){
             memset(mat, 0, sizeof(float)*12*(nn+4));  
             float coefi=0.0f, *m = mat, *v = vec, *dist = dis->pixels + i*nn;
@@ -454,20 +452,19 @@ void fit_localaffine(float_image *res, const int_image *nnf, const float_image *
                float work_sz;
                sgels_((char*) "Transposed", &mm, &n, &nrhs, mat, &lda, 
                    vec, &ldb, &work_sz, &lwork, &info); 
-               float *work;    
-               lwork=(int)work_sz;
-               work=NEWA(float,lwork);
+               
+               lwork = (int)work_sz;
+               float work[lwork];
+
                sgels_((char*) "Transposed", &mm, &n, &nrhs, mat, &lda, 
                    vec, &ldb, work, &lwork, &info); 
-               free(work);
+
                assert(info>=0); /* there is always a result for coherent input */
             } 
             float *aff = &res->pixels[6*i];
             aff[0]=vec[0]; aff[1]=vec[1]; aff[2]=vec[4];
             aff[3]=vec[2]; aff[4]=vec[3]; aff[5]=vec[5];
         }
-        free(mat);
-        free(vec); 
     }
 }
 
