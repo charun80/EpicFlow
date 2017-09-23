@@ -11,9 +11,10 @@ __all__ = [ "computeEpicFlow", "IllegalEpicFlowArgumentError", \
             "defaultVariationalParams", "defaultEpicFlowParams", \
             "sintelParams", "kittiParams", "middleburyParams" ]
 
+import os
 
 _EpicLibName = 'libctypesEpicFlow.so'
-_EpicLibPath = '.'
+_EpicLibPath = os.path.dirname( os.path.abspath(__file__) )
 
 _VariParamDefaultCall = None
 _EpicFlowParamDefaultCall = None
@@ -318,6 +319,21 @@ def middleburyParams():
 ####################################################################################
 
 
+def computeSobelEdges( img ):
+    import cv2
+    
+    grad_x = cv2.Sobel( img, cv2.CV_32F, dx=1, dy=0, ksize=-1, borderType=cv2.BORDER_DEFAULT )
+    grad_y = cv2.Sobel( img, cv2.CV_32F, dx=0, dy=1, ksize=-1, borderType=cv2.BORDER_DEFAULT )
+    
+    edges = np.sqrt( grad_x**2 + grad_y**2 )
+    edges *= 1./ edges.max()
+    
+    return edges
+
+
+####################################################################################
+
+
 class IllegalEpicFlowArgumentError(ValueError):
     pass
 
@@ -329,6 +345,9 @@ def _memId( fNdArray ):
 
 
 def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFlowParams=None, fAllowEdgeImgModification=False ):
+    
+    if None == fEdgeImg:
+        fEdgeImg = computeSobelEdges( fImg1 )
     
     if fImg1.shape != fImg2.shape:
         raise IllegalEpicFlowArgumentError("Input image shapes to not match: %s != %s", str(fImg1.shape), str(fImg2.shape) )
