@@ -139,19 +139,16 @@ class _color_image_t(ct.Structure):
                 f_ndimage = f_ndimage.transpose((2,0,1))
         
         f_ndimage = np.asarray( f_ndimage, dtype=np.float32 )
+        if not _isRowAligned( f_ndimage ):
+            f_ndimage = _convert2RowAlignedArray( f_ndimage )
         
         if f_ndimage.ndim == 2:
             # one channel (gray) image
-            if _isRowAligned( f_ndimage ):
-                c1 = f_ndimage
-            else:
-                c1 = _convert2RowAlignedArray( f_ndimage )
-            c2 = c1
-            c3 = c1
+            c1 = f_ndimage
+            c2 = f_ndimage
+            c3 = f_ndimage
         elif f_ndimage.ndim == 3:
             # color image
-            if not _isRowAligned( f_ndimage ):
-                f_ndimage = _convert2RowAlignedArray( f_ndimage )
             c1 = f_ndimage[0,:,:]
             c2 = f_ndimage[1,:,:]
             c3 = f_ndimage[2,:,:]
@@ -341,6 +338,7 @@ def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFl
     
     lImg1    = _color_image_t.fromArray( fImg1 )
     lImg2    = _color_image_t.fromArray( fImg2 )
+    
     lEdgeImg = _float_image_t.fromArray( fEdgeImg )
     lMatches = _float_image_t.fromArray( fMatches )
     
