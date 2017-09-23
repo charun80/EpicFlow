@@ -218,8 +218,8 @@ void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_i
     #endif
     for(int i=0 ; i<im->height ; i++){
         for( int j=0 ; j<im->width ; j++){
-            flowx->data[i*im->stride+j] = newvects.pixels[2*(i*im->width+j)];
-            flowy->data[i*im->stride+j] = newvects.pixels[2*(i*im->width+j)+1];
+            flowx->data[(i*flowx->stride) + j] = newvects.pixels[2*(i*im->width+j)];
+            flowy->data[(i*flowy->stride) + j] = newvects.pixels[2*(i*im->width+j)+1];
         }
     }  
     
