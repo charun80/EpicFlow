@@ -154,7 +154,7 @@ float *gaussian_filter(const float sigma, int *filter_order){
     float sum = 0.0f;
     int i;
     for(i=-(*filter_order) ; i<=*filter_order ; i++){
-        data[i+(*filter_order)] = exp(-i*i*alpha);
+        data[i+(*filter_order)] = expf( -i*i*alpha );
         sum += data[i+(*filter_order)];
     }
     for(i=-(*filter_order) ; i<=*filter_order ; i++){
@@ -510,34 +510,35 @@ void color_image_convolve_hv(color_image_t *dst, const color_image_t *src, const
 
 /************ Others **********/
 
-float pow2( float f ) {return f*f;}
+static inline float pow2( float f ) {return f*f;}
+
 /* return a new image in lab color space */
 color_image_t *rgb_to_lab(const color_image_t *im){
 
     color_image_t *res = color_image_new(im->width, im->height);
     const int npix = im->stride*im->height;
 
-    const float T=0.008856;
+    const float T=0.008856f;
     const float color_attenuation = 1.5f;
     int i;
     for(i=0 ; i<npix ; i++){
         const float r = im->c1[i]/255.f;
         const float g = im->c2[i]/255.f;
         const float b = im->c3[i]/255.f;
-        float X=0.412453 * r + 0.357580 * g + 0.180423 * b;
-        float Y=0.212671 * r + 0.715160 * g + 0.072169 * b;
-        float Z=0.019334 * r + 0.119193 * g + 0.950227 * b;
-        X/=0.950456;
-        Z/=1.088754;
-        float Y3 = pow(Y,1./3);
-        float fX = X>T ? pow(X,1./3) : 7.787 * X + 16/116.;
-        float fY = Y>T ? Y3 : 7.787 * Y + 16/116.;
-        float fZ = Z>T ? pow(Z,1./3) : 7.787 * Z + 16/116.;
-        float L = Y>T ? 116 * Y3 - 16.0 : 903.3 * Y;
-        float A = 500 * (fX - fY);
-        float B = 200 * (fY - fZ);
+        float X = 0.412453f * r + 0.357580f * g + 0.180423f * b;
+        float Y = 0.212671f * r + 0.715160f * g + 0.072169f * b;
+        float Z = 0.019334f * r + 0.119193f * g + 0.950227f * b;
+        X /= 0.950456f;
+        Z /= 1.088754f;
+        const float Y3 = powf( Y, 1.f / 3.f );
+        const float fX = X>T ? powf( X, 1.f / 3.f ) : 7.787f * X + 16.f/116.f;
+        const float fY = Y>T ? Y3 : 7.787f * Y + 16.f/116.;
+        const float fZ = Z>T ? powf( Z, 1.f/3.f) : 7.787f * Z + 16.f/116.f;
+        const float L = Y>T ? 116.f * Y3 - 16.f : 903.3f * Y;
+        const float A = 500.f * (fX - fY);
+        const float B = 200.f * (fY - fZ);
         // correct L*a*b*: dark area or light area have less reliable colors
-        float correct_lab = exp(-color_attenuation*pow2(pow2(L/100) - 0.6)); 
+        const float correct_lab = expf( -color_attenuation * pow2(pow2(L/100.f) - 0.6f)); 
         res->c1[i] = L;
         res->c2[i] = A*correct_lab;
         res->c3[i] = B*correct_lab;
