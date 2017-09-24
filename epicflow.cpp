@@ -121,7 +121,7 @@ int main(int argc, char **argv){
     
     // compute interpolation and energy minimization
     color_image_t *imlab = rgb_to_lab(im1);
-    epic(wx, wy, imlab, &matches, &edges, &epic_params, 1);
+    epic(wx, wy, imlab, &matches, &edges, &epic_params, 8);
     // energy minimization
     variational(wx, wy, im1, im2, &flow_params);
     // write output file and free memory

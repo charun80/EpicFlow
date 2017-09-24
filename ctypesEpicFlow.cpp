@@ -14,7 +14,7 @@ DLL_PUBLIC void computeEpicFlow(
           image_t*              const f_wx_p,
           image_t*              const f_wy_p  )
 {
-    static const int l_numThreads = 1;
+    static const int l_numThreads = 8;
 
 
     // compute interpolation and energy minimization
