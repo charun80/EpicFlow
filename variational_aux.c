@@ -4,6 +4,15 @@
 #include "variational_aux.h"
 
 #include <xmmintrin.h>
+
+
+
+#ifdef __cplusplus
+namespace ccore
+{
+#endif
+
+
 typedef __v4sf v4sf;
 
 #define datanorm 0.1f*0.1f//0.01f // square of the normalization factor
@@ -299,3 +308,11 @@ void compute_data_and_match(image_t *a11, image_t *a12, image_t *a22, image_t *b
         ix3p+=1; iy3p+=1; iz3p+=1; ixx3p+=1; ixy3p+=1; iyy3p+=1; ixz3p+=1; iyz3p+=1;
     }
 }
+
+
+
+#ifdef __cplusplus
+}  // namespace ccore
+#endif
+
+

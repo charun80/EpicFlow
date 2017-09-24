@@ -2,9 +2,16 @@
 #include <stdio.h>
 #include <jpeglib.h>
 #include <assert.h>
-//#include <setjmp.h>
 #include <png.h>
 #include "io.h"
+
+
+
+#ifdef __cplusplus
+namespace ccore
+{
+#endif
+
 
 
 /***************** HELPER ****************/
@@ -423,3 +430,8 @@ color_image_t *color_image_load(const char *fname){
     fclose(fp);
     return image;
 }
+
+
+#ifdef __cplusplus
+}  // namespace ccore
+#endif

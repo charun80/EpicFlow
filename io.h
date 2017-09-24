@@ -1,12 +1,19 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
+#ifndef __IO_H_
+#define __IO_H_
 
-#include <stdlib.h>
 
 #include "image.h"
 #include "array_types.h"
 
+
+
+#ifdef __cplusplus
+namespace ccore {
+extern "C" {
+#endif
+
+
+    
 /* read edges from a binary file containing width*height float32 values */
 float_image read_edges(const char *filename, const int width, const int height);
 
@@ -14,7 +21,7 @@ float_image read_edges(const char *filename, const int width, const int height);
 float_image read_matches(const char *filename);
 
 /* read a flow file and returns a pointer with two images containing the flow along x and y axis */
-image_t** readFlowFile(const char* filename);
+image_t **readFlowFile(const char* filename);
 
 /* write a flow to a file */
 void writeFlowFile(const char* filename, const image_t *flowx, const image_t *flowy);
@@ -24,5 +31,9 @@ color_image_t *color_image_load(const char *fname);
 
 
 #ifdef __cplusplus
-}
+}  // extern C
+}  // namespace ccore
 #endif
+
+
+#endif // __IO_H

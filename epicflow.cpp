@@ -1,5 +1,7 @@
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+
 #include "epic.h"
 #include "image.h"
 #include "io.h"
@@ -44,18 +46,19 @@ int main(int argc, char **argv){
     }
 
     // read arguments
-    color_image_t *im1 = color_image_load(argv[1]);
-    color_image_t *im2 = color_image_load(argv[2]);
-    float_image edges = read_edges(argv[3], im1->width, im1->height);
-    float_image matches = read_matches(argv[4]);
+    ccore::color_image_t *im1 = ccore::color_image_load(argv[1]);
+    ccore::color_image_t *im2 = ccore::color_image_load(argv[2]);
+    ccore::float_image edges = ccore::read_edges(argv[3], im1->width, im1->height);
+    ccore::float_image matches = ccore::read_matches(argv[4]);
     const char *outputfile = argv[5];
 
     // prepare variables
-    epic_params_t epic_params;
-    epic_params_default(&epic_params);
-    variational_params_t flow_params;
-    variational_params_default(&flow_params);
-    image_t *wx = image_new(im1->width, im1->height), *wy = image_new(im1->width, im1->height);
+    epic::epic_params_t epic_params;
+    epic::epic_params_default(&epic_params);
+    ccore::variational_params_t flow_params;
+    ccore::variational_params_default(&flow_params);
+    ccore::image_t *wx = ccore::image_new(im1->width, im1->height), 
+                   *wy = ccore::image_new(im1->width, im1->height);
     
     // read optional arguments 
     #define isarg(key)  !strcmp(a,key)
@@ -120,20 +123,20 @@ int main(int argc, char **argv){
     }
     
     // compute interpolation and energy minimization
-    color_image_t *imlab = rgb_to_lab(im1);
-    epic(wx, wy, imlab, &matches, &edges, &epic_params, 1);
+    ccore::color_image_t *imlab = rgb_to_lab(im1);
+    epic::epic(wx, wy, imlab, &matches, &edges, &epic_params, 1);
     // energy minimization
-    variational(wx, wy, im1, im2, &flow_params);
+    ccore::variational(wx, wy, im1, im2, &flow_params);
     // write output file and free memory
-    writeFlowFile(outputfile, wx, wy);
+    ccore::writeFlowFile(outputfile, wx, wy);
     
-    color_image_delete(im1);
-    color_image_delete(imlab);
-    color_image_delete(im2);
+    ccore::color_image_delete(im1);
+    ccore::color_image_delete(imlab);
+    ccore::color_image_delete(im2);
     free(matches.pixels);
     free(edges.pixels);
-    image_delete(wx);
-    image_delete(wy);
+    ccore::image_delete(wx);
+    ccore::image_delete(wy);
 
     return 0;
 }

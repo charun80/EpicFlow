@@ -7,6 +7,16 @@
 #include "solver.h"
 
 #include <xmmintrin.h>
+
+
+
+#ifdef __cplusplus
+namespace ccore
+{
+#endif
+
+
+
 typedef __v4sf v4sf;
 
 //THIS IS A SLOW VERSION BUT READABLE
@@ -399,3 +409,10 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
     free(floatarray);
 
 }
+
+
+
+#ifdef __cplusplus
+}  // namespace ccore
+#endif
+

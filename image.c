@@ -1,12 +1,25 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <xmmintrin.h>
 
 #include "image.h"
 
-#include <xmmintrin.h>
+
+
+#define MINMAX(a,b) MIN( MAX(a,0) , b-1 )
+
+
+#ifdef __cplusplus
+namespace ccore
+{
+#endif
+
+
 typedef __v4sf v4sf;
+
+
 
 /********** Create/Delete **********/
 
@@ -610,3 +623,10 @@ image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix
     
     return tmp;
 }
+
+
+#ifdef __cplusplus
+}  // namespace ccore
+#endif
+
+

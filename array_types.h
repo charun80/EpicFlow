@@ -1,6 +1,14 @@
 #ifndef ___ARRAY_TYPES_H___
 #define ___ARRAY_TYPES_H___
 
+
+
+#ifdef __cplusplus
+namespace ccore {
+extern "C" {
+#endif
+
+
 typedef unsigned char UBYTE;
 typedef unsigned int UINT;
 
@@ -171,7 +179,14 @@ typedef struct  {
 #define free_array(img) {free(img->pixels); free(img); img=NULL;}
 
 
+
+#ifdef __cplusplus
+}  // extern C
+}  // namespace ccore
 #endif
+
+
+#endif // ___ARRAY_TYPES_H___
 
 
 
