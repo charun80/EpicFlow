@@ -1,6 +1,6 @@
-#include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "variational.h"
 #include "variational_aux.h"
@@ -8,6 +8,17 @@
 
 
 #include <xmmintrin.h>
+
+
+
+#ifdef __cplusplus
+namespace ccore
+{
+#endif
+
+
+
+
 typedef __v4sf v4sf;
 
 convolution_t *deriv, *deriv_flow;
@@ -15,7 +26,12 @@ float half_alpha, half_delta_over3, half_gamma_over3;
 
 
 /* perform flow computation at one level of the pyramid */
-void compute_one_level(image_t *wx, image_t *wy, color_image_t *im1, color_image_t *im2, const variational_params_t *params){ 
+static void compute_one_level( image_t *wx,
+                               image_t *wy,
+                               color_image_t *im1,
+                               color_image_t *im2,
+                               const variational_params_t *params)
+{ 
     const int width = wx->width, height = wx->height, stride=wx->stride;
 
     image_t *du = image_new(width,height), *dv = image_new(width,height), // the flow increment
@@ -80,6 +96,7 @@ void compute_one_level(image_t *wx, image_t *wy, color_image_t *im1, color_image
     color_image_delete(Ixx); color_image_delete(Ixy); color_image_delete(Iyy); color_image_delete(Ixz); color_image_delete(Iyz);
 }
 
+
 /* set flow parameters to default */
 void variational_params_default(variational_params_t *params){
     if(!params){
@@ -97,7 +114,11 @@ void variational_params_default(variational_params_t *params){
 }
   
 /* Compute a refinement of the optical flow (wx and wy are modified) between im1 and im2 */
-void variational(image_t *wx, image_t *wy, const color_image_t *im1, const color_image_t *im2, const variational_params_t *params)
+void variational(image_t *wx,
+                 image_t *wy,
+                 const color_image_t *im1,
+                 const color_image_t *im2,
+                 const variational_params_t *params)
 {
 
     // initialize global variables
@@ -129,4 +150,10 @@ void variational(image_t *wx, image_t *wy, const color_image_t *im1, const color
     convolution_delete(deriv);
     convolution_delete(deriv_flow);
 }
+
+
+
+#ifdef __cplusplus
+}  // namespace ccore
+#endif
 
