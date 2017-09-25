@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <xmmintrin.h>
+#include "simd.h"
 
 #include "image.h"
 
@@ -17,8 +17,6 @@ namespace ccore
 #endif
 
 
-typedef __v4sf v4sf;
-
 
 
 /********** Create/Delete **********/
@@ -32,9 +30,9 @@ image_t *image_new(const int width, const int height){
     }
     image->width = width;
     image->height = height;  
-    image->stride = ( (width+3) / 4 ) * 4;
+    image->stride = ( (width + NSimdFloats - 1) / NSimdFloats ) * NSimdFloats;
     
-    const int lMemAlignError = posix_memalign( (void**)(&(image->data)), 16, image->stride * height * sizeof(float) );
+    const int lMemAlignError = posix_memalign( (void**)(&(image->data)), NSimdBytes, image->stride * height * sizeof(float) );
     
     if( 0 != lMemAlignError )
     {
@@ -60,9 +58,9 @@ void image_erase(image_t *image){
 /* multiply an image by a scalar */
 void image_mul_scalar(image_t *image, const float scalar){
     int i;
-    v4sf* imp = (v4sf*) image->data;
-    const v4sf scalarp = {scalar,scalar,scalar,scalar};
-    for( i=0 ; i<image->stride/4*image->height ; i++){
+    simdsf_t* imp = simdsf_ptrcast( image->data );
+    const simdsf_t scalarp = simdsf_init( scalar );
+    for( i=0 ; i < ((image->stride / NSimdFloats) * image->height); i++){
         (*imp) *= scalarp;
         imp+=1;
     }
@@ -89,8 +87,8 @@ color_image_t *color_image_new(const int width, const int height)
     }
     image->width = width;
     image->height = height;  
-    image->stride = ( (width+3) / 4 ) * 4;
-    const int lMemAlignError = posix_memalign( (void**)(&(image->c1)), 16, 3 * image->stride * height * sizeof(float) );
+    image->stride = ( (width + NSimdFloats - 1) / NSimdFloats ) * NSimdFloats;
+    const int lMemAlignError = posix_memalign( (void**)(&(image->c1)), NSimdBytes, 3 * image->stride * height * sizeof(float) );
     
     if( 0 != lMemAlignError )
     {
@@ -145,21 +143,20 @@ float *gaussian_filter(const float sigma, int *filter_order){
     if ( *filter_order == 0 )
         *filter_order = 1; 
     // compute coefficients
-    float *data = (float*) malloc(sizeof(float) * (2*(*filter_order)+1));
-    if(data == NULL ){
-        fprintf(stderr, "gaussian_filter() error: not enough memory\n");
-        exit(1);
+    float data[ 2*(*filter_order) + 1 ];
+    {
+        const float alpha = 1.0f/(2.0f*sigma*sigma);
+        float sum = 0.0f;
+
+        for( int i = -(*filter_order) ; i<=*filter_order ; i++){
+            data[i+(*filter_order)] = expf( -i*i*alpha );
+            sum += data[i+(*filter_order)];
+        }
+        for( int i = -(*filter_order) ; i<=*filter_order ; i++){
+            data[i+(*filter_order)] /= sum;
+        }
     }
-    const float alpha = 1.0f/(2.0f*sigma*sigma);
-    float sum = 0.0f;
-    int i;
-    for(i=-(*filter_order) ; i<=*filter_order ; i++){
-        data[i+(*filter_order)] = expf( -i*i*alpha );
-        sum += data[i+(*filter_order)];
-    }
-    for(i=-(*filter_order) ; i<=*filter_order ; i++){
-        data[i+(*filter_order)] /= sum;
-    }
+    
     // fill the output
     float *data2 = (float*) malloc(sizeof(float)*(*filter_order+1));
     if(data2 == NULL ){
@@ -167,7 +164,7 @@ float *gaussian_filter(const float sigma, int *filter_order){
         exit(1);
     }
     memcpy(data2, &data[*filter_order], sizeof(float)*(*filter_order)+sizeof(float));
-    free(data);
+    
     return data2;
 }
 
@@ -225,14 +222,15 @@ static void convolve_vert_fast_3(image_t *dst, const image_t *src, const convolu
     const int iterline = (src->stride>>2)+1;
     const float *coeff = conv->coeffs;
     //const float *coeff_accu = conv->coeffs_accu;
-    v4sf *srcp = (v4sf*) src->data, *dstp = (v4sf*) dst->data;
-    v4sf *srcp_p1 = (v4sf*) (src->data+src->stride);
+    simdsf_t *srcp = simdsf_ptrcast( src->data ), 
+             *dstp = simdsf_ptrcast( dst->data );
+    simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
     int i;
     for(i=iterline ; --i ; ){ // first line
         *dstp = (coeff[0]+coeff[1])*(*srcp) + coeff[2]*(*srcp_p1);
         dstp+=1; srcp+=1; srcp_p1+=1;
     }
-    v4sf* srcp_m1 = (v4sf*) src->data; 
+    simdsf_t* srcp_m1 = simdsf_ptrcast( src->data ); 
     for(i=src->height-1 ; --i ; ){ // others line
         int j;
         for(j=iterline ; --j ; ){
@@ -250,20 +248,21 @@ static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolu
     const int iterline = (src->stride>>2)+1;
     const float *coeff = conv->coeffs;
     //const float *coeff_accu = conv->coeffs_accu;
-    v4sf *srcp = (v4sf*) src->data, *dstp = (v4sf*) dst->data;
-    v4sf *srcp_p1 = (v4sf*) (src->data+src->stride);
-    v4sf *srcp_p2 = (v4sf*) (src->data+2*src->stride);
+    simdsf_t *srcp = simdsf_ptrcast( src->data ), 
+             *dstp = simdsf_ptrcast( dst->data );
+    simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
+    simdsf_t *srcp_p2 = simdsf_ptrcast( src->data + (2*src->stride) );
     int i;
     for(i=iterline ; --i ; ){ // first line
         *dstp = (coeff[0]+coeff[1]+coeff[2])*(*srcp) + coeff[3]*(*srcp_p1) + coeff[4]*(*srcp_p2);
         dstp+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
     }
-    v4sf* srcp_m1 = (v4sf*) src->data;
+    simdsf_t* srcp_m1 = simdsf_ptrcast( src->data );
     for(i=iterline ; --i ; ){ // second line
         *dstp = (coeff[0]+coeff[1])*(*srcp_m1) + coeff[2]*(*srcp) + coeff[3]*(*srcp_p1) + coeff[4]*(*srcp_p2);
         dstp+=1; srcp_m1+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
     }   
-    v4sf* srcp_m2 = (v4sf*) src->data;
+    simdsf_t* srcp_m2 = simdsf_ptrcast( src->data );
     for(i=src->height-3 ; --i ; ){ // others line
         int j;
         for(j=iterline ; --j ; ){
@@ -281,53 +280,84 @@ static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolu
     }  
 }
 
+
 static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convolution_t *conv){
     const int stride_minus_1 = src->stride-1;
     const int iterline = (src->stride>>2);
     const float *coeff = conv->coeffs;
-    v4sf *srcp = (v4sf*) src->data, *dstp = (v4sf*) dst->data;
+    simdsf_t *srcp = simdsf_ptrcast( src->data ), 
+             *dstp = simdsf_ptrcast( dst->data );
+    
     // create shifted version of src
-    float *src_p1 = (float*) malloc(sizeof(float)*src->stride),
-        *src_m1 = (float*) malloc(sizeof(float)*src->stride);
-    int j;
-    for(j=0;j<src->height;j++){
-        int i;
+    float *src_p1 = NULL;
+    {
+        const int lMemAlignError = posix_memalign( (void**)(&(src_p1)), NSimdBytes, src->stride * sizeof(float) * 2 );
+
+        if( 0 != lMemAlignError )
+        {
+            fprintf( stderr, "Error: allocating memory in convolve_horiz_fast_3(): %d !\n", lMemAlignError );
+            exit(1);
+        }
+    }
+    float *src_m1 = src_p1 + src->stride;
+    
+    for( int j=0; j<src->height; j++){
+        
         float *srcptr = (float*) srcp;
         const float right_coef = srcptr[src->width-1];
-        for(i=src->width;i<src->stride;i++)
+        for( int i = src->width; i < src->stride; i++)
             srcptr[i] = right_coef;
+        
         src_m1[0] = srcptr[0];
         memcpy(src_m1+1, srcptr , sizeof(float)*stride_minus_1);
         src_p1[stride_minus_1] = right_coef;
         memcpy(src_p1, srcptr+1, sizeof(float)*stride_minus_1);
-        v4sf *srcp_p1 = (v4sf*) src_p1, *srcp_m1 = (v4sf*) src_m1;
         
-        for(i=0;i<iterline;i++){
+        // this requires memory alignemnts
+        simdsf_t *srcp_p1 = simdsf_ptrcast( src_p1 ), 
+                 *srcp_m1 = simdsf_ptrcast( src_m1 );
+        
+        for(int i=0; i < iterline; i++){
             *dstp = coeff[0]*(*srcp_m1) + coeff[1]*(*srcp) + coeff[2]*(*srcp_p1);
             dstp+=1; srcp_m1+=1; srcp+=1; srcp_p1+=1;
         }
     }
-    free(src_p1);
-    free(src_m1);
+    
+    free( src_p1 );
+    src_p1 = src_m1 = NULL;
 }
+
 
 static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convolution_t *conv){
     const int stride_minus_1 = src->stride-1;
     const int stride_minus_2 = src->stride-2;
     const int iterline = (src->stride>>2);
     const float *coeff = conv->coeffs;
-    v4sf *srcp = (v4sf*) src->data, *dstp = (v4sf*) dst->data;
-    float *src_p1 = (float*) malloc(sizeof(float)*src->stride*4);
-    float *src_p2 = src_p1+src->stride;
-    float *src_m1 = src_p2+src->stride;
-    float *src_m2 = src_m1+src->stride;
-    int j;
-    for(j=0;j<src->height;j++){
-        int i;
+    
+    simdsf_t *srcp = simdsf_ptrcast( src->data ),
+             *dstp = simdsf_ptrcast( dst->data );
+    
+    float *src_p1 = NULL;
+    {
+        const int lMemAlignError = posix_memalign( (void**)(&(src_p1)), NSimdBytes, src->stride * sizeof(float) * 4 );
+
+        if( 0 != lMemAlignError )
+        {
+            fprintf( stderr, "Error: allocating memory in convolve_horiz_fast_5(): %d !\n", lMemAlignError );
+            exit(1);
+        }
+    }
+    float *src_p2 = src_p1 + src->stride;
+    float *src_m1 = src_p2 + src->stride;
+    float *src_m2 = src_m1 + src->stride;
+    
+    for( int j=0;j<src->height;j++){
+        
         float *srcptr = (float*) srcp;
         const float right_coef = srcptr[src->width-1];
-        for(i=src->width;i<src->stride;i++)
+        for( int i=src->width;i<src->stride;i++)
             srcptr[i] = right_coef;
+        
         src_m1[0] = srcptr[0];
         memcpy(src_m1+1, srcptr , sizeof(float)*stride_minus_1);
         src_m2[0] = srcptr[0];
@@ -338,16 +368,22 @@ static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convol
         src_p2[stride_minus_1] = right_coef;
         src_p2[stride_minus_2] = right_coef;
         memcpy(src_p2, srcptr+2, sizeof(float)*stride_minus_2);
-                
-        v4sf *srcp_p1 = (v4sf*) src_p1, *srcp_p2 = (v4sf*) src_p2, *srcp_m1 = (v4sf*) src_m1, *srcp_m2 = (v4sf*) src_m2;
         
-        for(i=0;i<iterline;i++){
+        // this requires memory alignemnts
+        simdsf_t *srcp_p1 = simdsf_ptrcast( src_p1 ), 
+                 *srcp_p2 = simdsf_ptrcast( src_p2 ), 
+                 *srcp_m1 = simdsf_ptrcast( src_m1 ), 
+                 *srcp_m2 = simdsf_ptrcast( src_m2 );
+        
+        for( int i=0;i<iterline;i++){
             *dstp = coeff[0]*(*srcp_m2) + coeff[1]*(*srcp_m1) + coeff[2]*(*srcp) + coeff[3]*(*srcp_p1) + coeff[4]*(*srcp_p2);
             dstp+=1; srcp_m2 +=1; srcp_m1+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
         }
     }
     free(src_p1);
+    src_p1 = src_p2 = src_m1 = src_m2 = NULL;
 }
+
 
 /* perform an horizontal convolution of an image */
 void convolve_horiz(image_t *dest, const image_t *src, const convolution_t *conv){
@@ -549,77 +585,104 @@ color_image_t *rgb_to_lab(const color_image_t *im){
 
 /* compute the saliency of a given image */
 image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix ){
-    int width = im->width, height = im->height, filter_size;
+    const int width = im->width;
+    const int height = im->height; 
+    
     
     // smooth image
     color_image_t *sim = color_image_new(width, height);
-    float *presmooth_filter = gaussian_filter(sigma_image, &filter_size);
-    convolution_t *presmoothing = convolution_new(filter_size, presmooth_filter, 1);
-    color_image_convolve_hv(sim, im, presmoothing, presmoothing);
-    convolution_delete(presmoothing);
-    free(presmooth_filter);
+    {
+        int filter_size = -1;
+        float* const presmooth_filter = gaussian_filter(sigma_image, &filter_size);
+        convolution_t* const presmoothing = convolution_new(filter_size, presmooth_filter, 1);
+        
+        color_image_convolve_hv(sim, im, presmoothing, presmoothing);
+        convolution_delete(presmoothing);
+        free(presmooth_filter);
+    }
   
     // compute derivatives
-    float deriv_filter[2] = {0.0f, -0.5f};
-    convolution_t *deriv = convolution_new(1, deriv_filter, 0);
-    color_image_t *imx = color_image_new(width, height), *imy = color_image_new(width, height);
-    color_image_convolve_hv(imx, sim, deriv, NULL);
-    color_image_convolve_hv(imy, sim, NULL, deriv);
-    convolution_delete(deriv);
+    color_image_t *imx = color_image_new(width, height), 
+                  *imy = color_image_new(width, height);
+    {
+        float deriv_filter[2] = {0.0f, -0.5f};
+        convolution_t* const deriv = convolution_new(1, deriv_filter, 0);
+        
+        color_image_convolve_hv(imx, sim, deriv, NULL);
+        color_image_convolve_hv(imy, sim, NULL, deriv);
+        convolution_delete(deriv);
+    }
     
     // compute autocorrelation matrix
     image_t *imxx = image_new(width, height),
             *imxy = image_new(width, height),
             *imyy = image_new(width, height);
+    {
+        simdsf_t *imx1p = simdsf_ptrcast( imx->c1 ),
+                 *imx2p = simdsf_ptrcast( imx->c2 ),
+                 *imx3p = simdsf_ptrcast( imx->c3 ),
 
-    v4sf *imx1p = (v4sf*) imx->c1,
-         *imx2p = (v4sf*) imx->c2,
-         *imx3p = (v4sf*) imx->c3,
+                 *imy1p = simdsf_ptrcast( imy->c1 ),
+                 *imy2p = simdsf_ptrcast( imy->c2 ),
+                 *imy3p = simdsf_ptrcast( imy->c3 ),
 
-         *imy1p = (v4sf*) imy->c1,
-         *imy2p = (v4sf*) imy->c2,
-         *imy3p = (v4sf*) imy->c3,
+                 *imxxp = simdsf_ptrcast( imxx->data ),
+                 *imxyp = simdsf_ptrcast( imxy->data ),
+                 *imyyp = simdsf_ptrcast( imyy->data );
 
-         *imxxp = (v4sf*) imxx->data,
-         *imxyp = (v4sf*) imxy->data,
-         *imyyp = (v4sf*) imyy->data;
-
-    int i;
-    for(i = 0 ; i<height*im->stride/4 ; i++){
-        *imxxp = (*imx1p)*(*imx1p) + (*imx2p)*(*imx2p) + (*imx3p)*(*imx3p);
-        *imxyp = (*imx1p)*(*imy1p) + (*imx2p)*(*imy2p) + (*imx3p)*(*imy3p);
-        *imyyp = (*imy1p)*(*imy1p) + (*imy2p)*(*imy2p) + (*imy3p)*(*imy3p);
-        imxxp+=1; imxyp+=1; imyyp+=1;
-        imx1p+=1; imx2p+=1; imx3p+=1;
-        imy1p+=1; imy2p+=1; imy3p+=1;
+        for( int i = 0 ; i < (height * im->stride / NSimdFloats); i++){
+            *imxxp = (*imx1p)*(*imx1p) + (*imx2p)*(*imx2p) + (*imx3p)*(*imx3p);
+            *imxyp = (*imx1p)*(*imy1p) + (*imx2p)*(*imy2p) + (*imx3p)*(*imy3p);
+            *imyyp = (*imy1p)*(*imy1p) + (*imy2p)*(*imy2p) + (*imy3p)*(*imy3p);
+            imxxp+=1; imxyp+=1; imyyp+=1;
+            imx1p+=1; imx2p+=1; imx3p+=1;
+            imy1p+=1; imy2p+=1; imy3p+=1;
+        }
     }
     
     // integrate autocorrelation matrix
-    float *smooth_filter = gaussian_filter(sigma_matrix, &filter_size);
-    convolution_t *smoothing = convolution_new(filter_size, smooth_filter, 1);
-    image_t *tmp = image_new(width, height);
-    convolve_horiz(tmp, imxx, smoothing);
-    convolve_vert(imxx, tmp, smoothing);
-    convolve_horiz(tmp, imxy, smoothing);
-    convolve_vert(imxy, tmp, smoothing);    
-    convolve_horiz(tmp, imyy, smoothing);
-    convolve_vert(imyy, tmp, smoothing);    
-    convolution_delete(smoothing);
-    free(smooth_filter);
-    
-    // compute smallest eigenvalue
-    v4sf vzeros = {0.0f,0.0f,0.0f,0.0f};
-    v4sf vhalf = {0.5f,0.5f,0.5f,0.5f};
-    v4sf *tmpp = (v4sf*) tmp->data;
-    imxxp = (v4sf*) imxx->data; imxyp = (v4sf*) imxy->data; imyyp = (v4sf*) imyy->data;
-    for(i = 0 ; i<height*im->stride/4 ; i++){
-        (*tmpp) = vhalf*( (*imxxp)+(*imyyp) ) ;
-        (*tmpp) = __builtin_ia32_sqrtps(__builtin_ia32_maxps(vzeros, (*tmpp) - __builtin_ia32_sqrtps(__builtin_ia32_maxps(vzeros, (*tmpp)*(*tmpp) + (*imxyp)*(*imxyp) - (*imxxp)*(*imyyp) ) )));
-        tmpp+=1; imxyp+=1; imxxp+=1; imyyp+=1;
+    image_t* const tmp = image_new(width, height);
+    {
+        int filter_size = -1;
+        float* const smooth_filter = gaussian_filter(sigma_matrix, &filter_size);
+        convolution_t* const smoothing = convolution_new(filter_size, smooth_filter, 1);
+        
+        convolve_horiz(tmp, imxx, smoothing);
+        convolve_vert(imxx, tmp, smoothing);
+        convolve_horiz(tmp, imxy, smoothing);
+        convolve_vert(imxy, tmp, smoothing);    
+        convolve_horiz(tmp, imyy, smoothing);
+        convolve_vert(imyy, tmp, smoothing);    
+        convolution_delete(smoothing);
+        free(smooth_filter);
     }
     
-    image_delete(imxx); image_delete(imxy); image_delete(imyy);
-    color_image_delete(imx); color_image_delete(imy);
+    // compute smallest eigenvalue
+    {
+        simdsf_t vzeros = simdsf_init( 0.0f );
+        simdsf_t vhalf = simdsf_init( 0.5f );
+        simdsf_t *tmpp = simdsf_ptrcast( tmp->data );
+        simdsf_t *imxxp = simdsf_ptrcast( imxx->data ); 
+        simdsf_t *imxyp = simdsf_ptrcast( imxy->data ); 
+        simdsf_t *imyyp = simdsf_ptrcast( imyy->data );
+        
+        for( int i = 0 ; i < (height * im->stride / NSimdFloats); i++){
+            (*tmpp) = vhalf * ( (*imxxp)+(*imyyp) );
+            (*tmpp) = simdsf_sqrt( simdsf_max( vzeros, 
+                                              (*tmpp) - simdsf_sqrt( simdsf_max( vzeros, 
+                                                                                 (*tmpp)*(*tmpp) + (*imxyp)*(*imxyp) - (*imxxp)*(*imyyp) ) )) );
+            tmpp+=1;
+            imxyp+=1;
+            imxxp+=1;
+            imyyp+=1;
+        }
+    }
+    
+    image_delete(imxx); 
+    image_delete(imxy); 
+    image_delete(imyy);
+    color_image_delete(imx); 
+    color_image_delete(imy);
     color_image_delete(sim);
     
     return tmp;

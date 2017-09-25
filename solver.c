@@ -6,7 +6,8 @@
 #include "image.h"
 #include "solver.h"
 
-#include <xmmintrin.h>
+#include "simd.h"
+
 
 
 
@@ -80,14 +81,15 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
     const int stride = du->stride, width = du->width;
     const int iterheight = du->height-1, iterline = (stride)/4, width_minus_1_sizeoffloat = sizeof(float)*(width-1);
     int j,iter,i,k;
-    float *floatarray = NULL; 
-    const int lMemAlignError = posix_memalign( (void**)(&floatarray), 16, 3 * stride * sizeof(float) );
+    float *floatarray = NULL;
     
+    const int lMemAlignError = posix_memalign( (void**)(&floatarray), NSimdBytes, 3 * stride * sizeof(float) );
     if ( 0 != lMemAlignError )
     {
         fprintf( stderr, "Error: allocating memory in sor_coupled: %d !\n", lMemAlignError );
         exit(1);
-    }   
+    }
+    
     float *f1 = floatarray;
     float *f2 = f1+stride;
     float *f3 = f2+stride;
