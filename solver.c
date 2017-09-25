@@ -18,7 +18,6 @@ namespace ccore
 
 
 
-typedef __v4sf v4sf;
 
 //THIS IS A SLOW VERSION BUT READABLE
 //Perform n iterations of the sor_coupled algorithm
@@ -78,9 +77,12 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
         return;
     }
     
-    const int stride = du->stride, width = du->width;
-    const int iterheight = du->height-1, iterline = (stride)/4, width_minus_1_sizeoffloat = sizeof(float)*(width-1);
-    int j,iter,i,k;
+    const int stride = du->stride;
+    const int width = du->width;
+    const int iterheight = du->height-1;
+    const int iterline = (stride) / NSIMDBYTES;
+    const int width_minus_1_sizeoffloat = sizeof(float)*(width-1);
+    
     float *floatarray = NULL;
     
     const int lMemAlignError = posix_memalign( (void**)(&floatarray), NSimdBytes, 3 * stride * sizeof(float) );
@@ -98,32 +100,48 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
     memset(&f2[width-1], 0, sizeof(float)*(stride-width+1));
     memset(&f3[width-1], 0, sizeof(float)*(stride-width+1));   	  
 
-    { // first iteration
-        v4sf *a11p = (v4sf*) a11->data, *a12p = (v4sf*) a12->data, *a22p = (v4sf*) a22->data, *b1p = (v4sf*) b1->data, *b2p = (v4sf*) b2->data, *hp = (v4sf*) dpsis_horiz->data, *vp = (v4sf*) dpsis_vert->data;
-        float *du_ptr = du->data, *dv_ptr = dv->data;
-        v4sf *dub = (v4sf*) (du_ptr+stride), *dvb = (v4sf*) (dv_ptr+stride);
+    { 
+        // first iteration
+        simdsf_t *a11p = simdsf_ptrcast( a11->data ),
+                 *a12p = simdsf_ptrcast( a12->data ),
+                 *a22p = simdsf_ptrcast( a22->data ),
+                  *b1p = simdsf_ptrcast( b1->data ),
+                  *b2p = simdsf_ptrcast( b2->data ),
+                  *hp  = simdsf_ptrcast( dpsis_horiz->data ),
+                   *vp = simdsf_ptrcast( dpsis_vert->data );
+              
+        float *du_ptr = du->data, 
+              *dv_ptr = dv->data;
+        simdsf_t *dub = (simdsf_t*) (du_ptr+stride), 
+                 *dvb = (simdsf_t*) (dv_ptr+stride);
         
         { // first iteration - first line
         
             memcpy(f1+1, ((float*) hp), width_minus_1_sizeoffloat);   
             memcpy(f2, du_ptr+1, width_minus_1_sizeoffloat);
             memcpy(f3, dv_ptr+1, width_minus_1_sizeoffloat);
-            v4sf* hpl = (v4sf*) f1, *dur = (v4sf*) f2, *dvr = (v4sf*) f3;
+            
+            simdsf_t *hpl = simdsf_ptrcast( f1 ), 
+                     *dur = simdsf_ptrcast( f2 ),
+                     *dvr = simdsf_ptrcast( f3 );
             
             { // left block
                 // reverse 2x2 diagonal block
-                const v4sf dpsis = (*hpl) + (*hp) + (*vp);
-                const v4sf A11 = (*a22p)+dpsis, A22 = (*a11p)+dpsis;
-                const v4sf det = A11*A22 - (*a12p)*(*a12p);
+                const simdsf_t dpsis = (*hpl) + (*hp) + (*vp);
+                const simdsf_t A11 = (*a22p)+dpsis, 
+                               A22 = (*a11p)+dpsis;
+                const simdsf_t det = A11*A22 - (*a12p)*(*a12p);
                 *a11p = A11/det;
                 *a22p = A22/det;
                 *a12p /= -det;
+                
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
+                const simdsf_t s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
                 du_ptr[0] += omega*( a11p[0][0]*s1[0] + a12p[0][0]*s2[0] - du_ptr[0] );
 	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] );             
-                for(k=1;k<4;k++){
+                
+                for( int k=1; k < NSimdFloats; k++){
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -132,20 +150,22 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;        
+                du_ptr += NSimdFloats; dv_ptr += NSimdFloats;        
             }
-            for(i=iterline;--i;){
+            for( int i=iterline; --i; ){
                 // reverse 2x2 diagonal block
-                const v4sf dpsis = (*hpl) + (*hp) + (*vp);
-                const v4sf A11 = (*a22p)+dpsis, A22 = (*a11p)+dpsis;
-                const v4sf det = A11*A22 - (*a12p)*(*a12p);
+                const simdsf_t dpsis = (*hpl) + (*hp) + (*vp);
+                const simdsf_t A11 = (*a22p)+dpsis,
+                               A22 = (*a11p)+dpsis;
+                const simdsf_t det = A11*A22 - (*a12p)*(*a12p);
                 *a11p = A11/det;
                 *a22p = A22/det;
                 *a12p /= -det;
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
-                for(k=0;k<4;k++){
+                const simdsf_t s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
+                for( int k=0; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -154,34 +174,41 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;
             }
           
         }
         
-        v4sf *vpt = (v4sf*) dpsis_vert->data;
-        v4sf *dut = (v4sf*) du->data, *dvt = (v4sf*) dv->data;
+        simdsf_t *vpt = simdsf_ptrcast( dpsis_vert->data );
+        simdsf_t *dut = simdsf_ptrcast( du->data ), 
+                 *dvt = simdsf_ptrcast( dv->data );
         
-        for(j=iterheight;--j;){ // first iteration - middle lines
+        for( int j=iterheight; --j; ){ // first iteration - middle lines
             memcpy(f1+1, ((float*) hp), width_minus_1_sizeoffloat);   
             memcpy(f2, du_ptr+1, width_minus_1_sizeoffloat);
             memcpy(f3, dv_ptr+1, width_minus_1_sizeoffloat);
-            v4sf* hpl = (v4sf*) f1, *dur = (v4sf*) f2, *dvr = (v4sf*) f3;
+            
+            simdsf_t *hpl = simdsf_ptrcast( f1 ),
+                     *dur = simdsf_ptrcast( f2 ),
+                     *dvr = simdsf_ptrcast( f3 );
                  
             { // left block
                 // reverse 2x2 diagonal block
-                const v4sf dpsis = (*hpl) + (*hp) + (*vpt) + (*vp);
-                const v4sf A11 = (*a22p)+dpsis, A22 = (*a11p)+dpsis;
-                const v4sf det = A11*A22 - (*a12p)*(*a12p);
+                const simdsf_t dpsis = (*hpl) + (*hp) + (*vpt) + (*vp);
+                const simdsf_t A11 = (*a22p)+dpsis, 
+                               A22 = (*a11p)+dpsis;
+                const simdsf_t det = A11*A22 - (*a12p)*(*a12p);
                 *a11p = A11/det;
                 *a22p = A22/det;
                 *a12p /= -det;
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
                 du_ptr[0] += omega*( a11p[0][0]*s1[0] + a12p[0][0]*s2[0] - du_ptr[0] );
 	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] );             
-                for(k=1;k<4;k++){
+                for( int k=1; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -190,20 +217,24 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;           
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;           
             }
-            for(i=iterline;--i;){
+            
+            for( int i=iterline; --i; ) {
                 // reverse 2x2 diagonal block
-                const v4sf dpsis = (*hpl) + (*hp) + (*vpt) + (*vp);
-                const v4sf A11 = (*a22p)+dpsis, A22 = (*a11p)+dpsis;
-                const v4sf det = A11*A22 - (*a12p)*(*a12p);
+                const simdsf_t dpsis = (*hpl) + (*hp) + (*vpt) + (*vp);
+                const simdsf_t   A11 = (*a22p)+dpsis, 
+                                 A22 = (*a11p)+dpsis;
+                const simdsf_t   det = A11*A22 - (*a12p)*(*a12p);
                 *a11p = A11/det;
                 *a22p = A22/det;
                 *a12p /= -det;
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
-                for(k=0;k<4;k++){
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
+                for( int k=0; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -212,31 +243,35 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;
             }
-                
         }
         
         { // first iteration - last line
             memcpy(f1+1, ((float*) hp), width_minus_1_sizeoffloat);   
             memcpy(f2, du_ptr+1, width_minus_1_sizeoffloat);
             memcpy(f3, dv_ptr+1, width_minus_1_sizeoffloat);
-            v4sf* hpl = (v4sf*) f1, *dur = (v4sf*) f2, *dvr = (v4sf*) f3;
+            simdsf_t *hpl = simdsf_ptrcast( f1 ),
+                     *dur = simdsf_ptrcast( f2 ),
+                     *dvr = simdsf_ptrcast( f3 );
 
             { // left block
                 // reverse 2x2 diagonal block
-                const v4sf dpsis = (*hpl) + (*hp) + (*vpt);
-                const v4sf A11 = (*a22p)+dpsis, A22 = (*a11p)+dpsis;
-                const v4sf det = A11*A22 - (*a12p)*(*a12p);
+                const simdsf_t dpsis = (*hpl) + (*hp) + (*vpt);
+                const simdsf_t A11 = (*a22p)+dpsis,
+                               A22 = (*a11p)+dpsis;
+                const simdsf_t det = A11*A22 - (*a12p)*(*a12p);
                 *a11p = A11/det;
                 *a22p = A22/det;
                 *a12p /= -det;
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
                 du_ptr[0] += omega*( a11p[0][0]*s1[0] + a12p[0][0]*s2[0] - du_ptr[0] );
 	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] );             
-                for(k=1;k<4;k++){
+                for( int k=1; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -245,20 +280,25 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;           
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;           
             }
-            for(i=iterline;--i;){
+            
+            for( int i=iterline; --i; )
+            {
                 // reverse 2x2 diagonal block
-                const v4sf dpsis = (*hpl) + (*hp) + (*vpt);
-                const v4sf A11 = (*a22p)+dpsis, A22 = (*a11p)+dpsis;
-                const v4sf det = A11*A22 - (*a12p)*(*a12p);
+                const simdsf_t dpsis = (*hpl) + (*hp) + (*vpt);
+                const simdsf_t A11 = (*a22p)+dpsis,
+                               A22 = (*a11p)+dpsis;
+                const simdsf_t det = A11*A22 - (*a12p)*(*a12p);
                 *a11p = A11/det;
                 *a22p = A22/det;
                 *a12p /= -det;
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
-                for(k=0;k<4;k++){
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
+                for( int k=0; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -267,31 +307,46 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;
+                du_ptr += NSimdFloats; dv_ptr += NSimdFloats;
             }
 
         }
     }
 
-   for(iter=iterations;--iter;){ // other iterations
-        v4sf *a11p = (v4sf*) a11->data, *a12p = (v4sf*) a12->data, *a22p = (v4sf*) a22->data, *b1p = (v4sf*) b1->data, *b2p = (v4sf*) b2->data, *hp = (v4sf*) dpsis_horiz->data, *vp = (v4sf*) dpsis_vert->data;
-        float *du_ptr = du->data, *dv_ptr = dv->data;
-        v4sf *dub = (v4sf*) (du_ptr+stride), *dvb = (v4sf*) (dv_ptr+stride);
+    for( int iter=iterations; --iter;)
+    { 
+        // other iterations
+        simdsf_t *a11p = simdsf_ptrcast( a11->data ),
+                 *a12p = simdsf_ptrcast( a12->data ),
+                 *a22p = simdsf_ptrcast( a22->data ),
+                 *b1p  = simdsf_ptrcast( b1->data ),
+                 *b2p  = simdsf_ptrcast( b2->data ),
+                 *hp   = simdsf_ptrcast( dpsis_horiz->data ),
+                 *vp   = simdsf_ptrcast( dpsis_vert->data );
+        
+        float *du_ptr = du->data,
+              *dv_ptr = dv->data;
+        simdsf_t *dub = simdsf_ptrcast( du_ptr + stride ),
+                 *dvb = simdsf_ptrcast( dv_ptr + stride );
         
         { // other iteration - first line
         
             memcpy(f1+1, ((float*) hp), width_minus_1_sizeoffloat);   
             memcpy(f2, du_ptr+1, width_minus_1_sizeoffloat);
             memcpy(f3, dv_ptr+1, width_minus_1_sizeoffloat);
-            v4sf* hpl = (v4sf*) f1, *dur = (v4sf*) f2, *dvr = (v4sf*) f3;
+            simdsf_t *hpl = simdsf_ptrcast( f1 ),
+                     *dur = simdsf_ptrcast( f2 ), 
+                     *dvr = simdsf_ptrcast( f3 );
             
             { // left block
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
+                const simdsf_t s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
                 du_ptr[0] += omega*( a11p[0][0]*s1[0] + a12p[0][0]*s2[0] - du_ptr[0] );
 	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] );             
-                for(k=1;k<4;k++){
+                
+                for( int k=1; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -300,13 +355,16 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;        
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;        
             }
-            for(i=iterline;--i;){
+            for( int i=iterline; --i; )
+            {
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
-                for(k=0;k<4;k++){
+                const simdsf_t s1 = (*hp)*(*dur) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vp)*(*dvb) + (*b2p);
+                for( int k=0; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -315,27 +373,35 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;
             }
           
         }
         
-        v4sf *vpt = (v4sf*) dpsis_vert->data;
-        v4sf *dut = (v4sf*) du->data, *dvt = (v4sf*) dv->data;
+        simdsf_t *vpt = simdsf_ptrcast( dpsis_vert->data );
+        simdsf_t *dut = simdsf_ptrcast( du->data ), 
+                 *dvt = simdsf_ptrcast( dv->data );
         
-        for(j=iterheight;--j;){ // other iteration - middle lines
+        for( int j=iterheight; --j; )
+        { 
+            // other iteration - middle lines
             memcpy(f1+1, ((float*) hp), width_minus_1_sizeoffloat);   
             memcpy(f2, du_ptr+1, width_minus_1_sizeoffloat);
             memcpy(f3, dv_ptr+1, width_minus_1_sizeoffloat);
-            v4sf* hpl = (v4sf*) f1, *dur = (v4sf*) f2, *dvr = (v4sf*) f3;
+            simdsf_t  *hpl = simdsf_ptrcast( f1 ),
+                      *dur = simdsf_ptrcast( f2 ),
+                      *dvr = simdsf_ptrcast( f3 );
                  
             { // left block
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
                 du_ptr[0] += omega*( a11p[0][0]*s1[0] + a12p[0][0]*s2[0] - du_ptr[0] );
 	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] );             
-                for(k=1;k<4;k++){
+                
+                for( int k=1; k < NSimdFloats; k++ )
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -344,13 +410,18 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;           
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;           
             }
-            for(i=iterline;--i;){
+            
+            for( int i=iterline; --i; )
+            {
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
-                for(k=0;k<4;k++){
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*vp)*(*dub) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*vp)*(*dvb) + (*b2p);
+                
+                for( int k=0; k < NSimdFloats; k++ )
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -359,24 +430,30 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; vp+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; dub+=1; dvb +=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;
             }
                 
         }
         
-        { // other iteration - last line
+        { 
+            // other iteration - last line
             memcpy(f1+1, ((float*) hp), width_minus_1_sizeoffloat);   
             memcpy(f2, du_ptr+1, width_minus_1_sizeoffloat);
             memcpy(f3, dv_ptr+1, width_minus_1_sizeoffloat);
-            v4sf* hpl = (v4sf*) f1, *dur = (v4sf*) f2, *dvr = (v4sf*) f3;
+            simdsf_t *hpl = simdsf_ptrcast( f1 ),
+                     *dur = simdsf_ptrcast( f2 ),
+                     *dvr = simdsf_ptrcast( f3 );
 
             { // left block
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
                 du_ptr[0] += omega*( a11p[0][0]*s1[0] + a12p[0][0]*s2[0] - du_ptr[0] );
-	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] );             
-                for(k=1;k<4;k++){
+	            dv_ptr[0] += omega*( a12p[0][0]*s1[0] + a22p[0][0]*s2[0] - dv_ptr[0] ); 
+            
+                for ( int k=1; k < NSimdFloats; k++)
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -385,13 +462,18 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;           
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;           
             }
-            for(i=iterline;--i;){
+            
+            for( int i=iterline;--i; )
+            {
                 // do one iteration
-                const v4sf s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
-                const v4sf s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
-                for(k=0;k<4;k++){
+                const simdsf_t s1 = (*hp)*(*dur) + (*vpt)*(*dut) + (*b1p);
+                const simdsf_t s2 = (*hp)*(*dvr) + (*vpt)*(*dvt) + (*b2p);
+                
+                for( int k=0; k < NSimdFloats; k++ )
+                {
                     const float B1 = hpl[0][k]*du_ptr[k-1] + s1[k];
                     const float B2 = hpl[0][k]*dv_ptr[k-1] + s2[k];
                     du_ptr[k] += omega*( a11p[0][k]*B1 + a12p[0][k]*B2 - du_ptr[k] );
@@ -400,16 +482,14 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
                 // increment pointer
                 hpl+=1; hp+=1; vpt+=1; a11p+=1; a12p+=1; a22p+=1;
                 dur+=1; dvr+=1; dut+=1; dvt+=1; b1p+=1; b2p+=1;
-                du_ptr += 4; dv_ptr += 4;
+                du_ptr += NSimdFloats;
+                dv_ptr += NSimdFloats;
             }
 
         }
     }
 
-
-
     free(floatarray);
-
 }
 
 

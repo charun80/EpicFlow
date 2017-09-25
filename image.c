@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 #include "simd.h"
 
 #include "image.h"
@@ -31,6 +32,7 @@ image_t *image_new(const int width, const int height){
     image->width = width;
     image->height = height;  
     image->stride = ( (width + NSimdFloats - 1) / NSimdFloats ) * NSimdFloats;
+    assert( 0 == (image->stride % NSimdFloats) );
     
     const int lMemAlignError = posix_memalign( (void**)(&(image->data)), NSimdBytes, image->stride * height * sizeof(float) );
     
@@ -88,15 +90,16 @@ color_image_t *color_image_new(const int width, const int height)
     image->width = width;
     image->height = height;  
     image->stride = ( (width + NSimdFloats - 1) / NSimdFloats ) * NSimdFloats;
-    const int lMemAlignError = posix_memalign( (void**)(&(image->c1)), NSimdBytes, 3 * image->stride * height * sizeof(float) );
+    assert( 0 == (image->stride % NSimdFloats) );
     
+    const int lMemAlignError = posix_memalign( (void**)(&(image->c1)), NSimdBytes, 3 * image->stride * height * sizeof(float) );
     if( 0 != lMemAlignError )
     {
         fprintf(stderr, "Error: allocating memory in color_image_new(): %d !\n", lMemAlignError);
         exit(1);
     }
-    image->c2 =  image->c1+image->stride*height;
-    image->c3 =  image->c2+image->stride*height;
+    image->c2 = image->c1 + image->stride*height;
+    image->c3 = image->c2 + image->stride*height;
     return image;
 }
 
