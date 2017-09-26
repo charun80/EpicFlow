@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 
 #include "image.h"
 
@@ -92,14 +93,47 @@ color_image_t *color_image_new(const int width, const int height)
 /* allocate a new color image and copy the content from src */
 color_image_t *color_image_cpy(const color_image_t *src){
     color_image_t *dst = color_image_new(src->width, src->height);
-    memcpy(dst->c1, src->c1, 3*src->stride*src->height*sizeof(float));
+    
+    if (src->c1 == src->c2)
+    {
+        // gray scale image
+        assert( src->c2 == src->c3 );
+        memcpy(dst->c1, src->c1, src->stride * src->height * sizeof(float));
+        memcpy(dst->c2, src->c1, src->stride * src->height * sizeof(float));
+        memcpy(dst->c3, src->c1, src->stride * src->height * sizeof(float));
+    }
+    else 
+    {
+        // image with three channels
+        assert( src->c1 != src->c3  );
+        assert( src->c2 != src->c3  );
+        memcpy( dst->c1, src->c1, 3*src->stride * src->height*sizeof(float) );
+    }
+    
     return dst;
 }
 
 /* set all pixels values to zeros */
-void color_image_erase(color_image_t *image){
-    memset(image->c1, 0, 3*image->stride*image->height*sizeof(float));
+void color_image_erase(color_image_t *image)
+{
+    if (image->c1 == image->c2)
+    {
+        // gray scale image
+        assert( image->c2 == image->c3 );
+        
+        memset( image->c1, 0, image->stride * image->height * sizeof(float));
+        memset( image->c2, 0, image->stride * image->height * sizeof(float));
+        memset( image->c3, 0, image->stride * image->height * sizeof(float));
+    }
+    else 
+    {
+        // image with three channels
+        assert( image->c1 != image->c3  );
+        assert( image->c2 != image->c3  );
+        memset( image->c1, 0, 3 * image->stride * image->height*sizeof(float) );
+    }
 }
+
 
 /* free memory of a color image */
 void color_image_delete(color_image_t *image){
