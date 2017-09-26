@@ -7,6 +7,9 @@
 #include "io.h"
 #include "variational.h"
 
+#include "tictoc.h"
+
+
 
 /* show usage information */
 void usage(){
@@ -122,11 +125,18 @@ int main(int argc, char **argv){
         }   
     }
     
+    tictoc tt;
+    
+    tt.tic();
+    
     // compute interpolation and energy minimization
     ccore::color_image_t *imlab = rgb_to_lab(im1);
     epic::epic(wx, wy, imlab, &matches, &edges, &epic_params, 1);
     // energy minimization
     ccore::variational(wx, wy, im1, im2, &flow_params);
+    
+    tt.toc();
+    
     // write output file and free memory
     ccore::writeFlowFile(outputfile, wx, wy);
     
