@@ -80,7 +80,7 @@ void sor_coupled(image_t *du, image_t *dv, image_t *a11, image_t *a12, image_t *
     const int stride = du->stride;
     const int width = du->width;
     const int iterheight = du->height-1;
-    const int iterline = (stride) / NSIMDBYTES;
+    const int iterline = (stride) / NSimdFloats;
     const int width_minus_1_sizeoffloat = sizeof(float)*(width-1);
     
     float *floatarray = NULL;

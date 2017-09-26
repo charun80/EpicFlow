@@ -49,7 +49,7 @@
 
 #else
 
-    #define "Neither SSE nor AVX instruction set available - no compilation possible"
+    #define SIMD_MESSAGE "Neither SSE nor AVX instruction set available - no compilation possible"
     #error SIMD_MESSAGE 
 
 #endif // __SSE__
@@ -66,5 +66,8 @@ inline static simdsf_t* simdsf_ptrcast( void* fptr )
 }
 
 #pragma message( SIMD_MESSAGE )
+#undef SIMD_MESSAGE
+
+#undef NSIMDBYTES
 
 #endif // __SIMD_H_

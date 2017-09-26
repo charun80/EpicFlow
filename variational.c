@@ -6,8 +6,7 @@
 #include "variational_aux.h"
 #include "solver.h"
 
-
-#include <xmmintrin.h>
+#include "simd.h"
 
 
 
@@ -17,9 +16,6 @@ namespace ccore
 #endif
 
 
-
-
-typedef __v4sf v4sf;
 
 convolution_t *deriv, *deriv_flow;
 float half_alpha, half_delta_over3, half_gamma_over3;
@@ -69,11 +65,17 @@ static void compute_one_level( image_t *wx,
             sub_laplacian(b1, wx, smooth_horiz, smooth_vert);
             sub_laplacian(b2, wy, smooth_horiz, smooth_vert);
             // solve system
-            sor_coupled(du, dv, a11, a12, a22, b1, b2, smooth_horiz, smooth_vert, params->niter_solver, params->sor_omega);          
+            sor_coupled(du, dv, a11, a12, a22, b1, b2, smooth_horiz, smooth_vert, params->niter_solver, params->sor_omega);
+            
             // update flow plus flow increment
-            int i;
-            v4sf *uup = (v4sf*) uu->data, *vvp = (v4sf*) vv->data, *wxp = (v4sf*) wx->data, *wyp = (v4sf*) wy->data, *dup = (v4sf*) du->data, *dvp = (v4sf*) dv->data;
-            for( i=0 ; i<height*stride/4 ; i++){
+            simdsf_t *uup = simdsf_ptrcast( uu->data ),
+                     *vvp = simdsf_ptrcast( vv->data ),
+                     *wxp = simdsf_ptrcast( wx->data ),
+                     *wyp = simdsf_ptrcast( wy->data ),
+                     *dup = simdsf_ptrcast( du->data ),
+                     *dvp = simdsf_ptrcast( dv->data );
+            for( int i=0 ; i < (height * stride / NSimdFloats); i++)
+            {
                 (*uup) = (*wxp) + (*dup);
                 (*vvp) = (*wyp) + (*dvp);
                 uup+=1; vvp+=1; wxp+=1; wyp+=1;dup+=1;dvp+=1;
