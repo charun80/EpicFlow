@@ -222,7 +222,7 @@ convolution_t *convolution_new(const int order, const float *half_coeffs, const 
 }
 
 static void convolve_vert_fast_3(image_t *dst, const image_t *src, const convolution_t *conv){
-    const int iterline = (src->stride>>2)+1;
+    const int iterline = (src->stride / NSimdFloats) + 1;
     const float *coeff = conv->coeffs;
     //const float *coeff_accu = conv->coeffs_accu;
     simdsf_t *srcp = simdsf_ptrcast( src->data ), 
@@ -248,7 +248,7 @@ static void convolve_vert_fast_3(image_t *dst, const image_t *src, const convolu
 }
 
 static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolution_t *conv){
-    const int iterline = (src->stride>>2)+1;
+    const int iterline = (src->stride / NSimdFloats) + 1;
     const float *coeff = conv->coeffs;
     //const float *coeff_accu = conv->coeffs_accu;
     simdsf_t *srcp = simdsf_ptrcast( src->data ), 
@@ -286,7 +286,7 @@ static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolu
 
 static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convolution_t *conv){
     const int stride_minus_1 = src->stride-1;
-    const int iterline = (src->stride>>2);
+    const int iterline = src->stride / NSimdFloats;
     const float *coeff = conv->coeffs;
     simdsf_t *srcp = simdsf_ptrcast( src->data ), 
              *dstp = simdsf_ptrcast( dst->data );
@@ -334,7 +334,7 @@ static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convol
 static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convolution_t *conv){
     const int stride_minus_1 = src->stride-1;
     const int stride_minus_2 = src->stride-2;
-    const int iterline = (src->stride>>2);
+    const int iterline = src->stride / NSimdFloats;
     const float *coeff = conv->coeffs;
     
     simdsf_t *srcp = simdsf_ptrcast( src->data ),
