@@ -516,18 +516,30 @@ void convolution_delete(convolution_t *conv){
 
 /* perform horizontal and/or vertical convolution to a color image */
 void color_image_convolve_hv(color_image_t *dst, const color_image_t *src, const convolution_t *horiz_conv, const convolution_t *vert_conv){
-    const int width = src->width, height = src->height, stride = src->stride;
+    const int width = src->width, 
+             height = src->height,
+             stride = src->stride;
     // separate channels of images
-    image_t src_red = {width,height,stride,src->c1}, src_green = {width,height,stride,src->c2}, src_blue = {width,height,stride,src->c3}, 
-            dst_red = {width,height,stride,dst->c1}, dst_green = {width,height,stride,dst->c2}, dst_blue = {width,height,stride,dst->c3};
+    const image_t src_red   = {width,height,stride,src->c1}, 
+                  src_green = {width,height,stride,src->c2},
+                  src_blue  = {width,height,stride,src->c3};
+                    
+    image_t   dst_red = {width,height,stride,dst->c1},
+            dst_green = {width,height,stride,dst->c2}, 
+             dst_blue = {width,height,stride,dst->c3};
     // horizontal and vertical
-    if(horiz_conv != NULL && vert_conv != NULL){
-        float *tmp_data = malloc(sizeof(float)*stride*height);
-        if(tmp_data == NULL){
-	        fprintf(stderr,"error color_image_convolve_hv(): not enough memory\n");
-	        exit(1);
-        }  
+    if ( (horiz_conv != NULL) && (vert_conv != NULL) )
+    {
+        float *tmp_data = NULL;
+        const int lMemAlignError = posix_memalign( (void**)(&(tmp_data)), NSimdBytes, stride * height * sizeof(float) );
+        if( 0 != lMemAlignError )
+        {
+            fprintf( stderr, "Error: allocating memory in color_image_convolve_hv(): %d !\n", lMemAlignError );
+            exit(1);
+        }
+        
         image_t tmp = {width,height,stride,tmp_data};   
+        
         // perform convolution for each channel
         convolve_horiz(&tmp,&src_red,horiz_conv); 
         convolve_vert(&dst_red,&tmp,vert_conv); 
@@ -536,11 +548,11 @@ void color_image_convolve_hv(color_image_t *dst, const color_image_t *src, const
         convolve_horiz(&tmp,&src_blue,horiz_conv); 
         convolve_vert(&dst_blue,&tmp,vert_conv);
         free(tmp_data);
-    }else if(horiz_conv != NULL && vert_conv == NULL){ // only horizontal
+    } else if( (horiz_conv != NULL) && (vert_conv == NULL) ) { // only horizontal
         convolve_horiz(&dst_red,&src_red,horiz_conv);
         convolve_horiz(&dst_green,&src_green,horiz_conv);
         convolve_horiz(&dst_blue,&src_blue,horiz_conv);
-    }else if(vert_conv != NULL && horiz_conv == NULL){ // only vertical
+    } else if( (vert_conv != NULL) && (horiz_conv == NULL) ) { // only vertical
         convolve_vert(&dst_red,&src_red,vert_conv);
         convolve_vert(&dst_green,&src_green,vert_conv);
         convolve_vert(&dst_blue,&src_blue,vert_conv);
