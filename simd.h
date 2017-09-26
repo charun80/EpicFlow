@@ -2,6 +2,9 @@
 #define __SIMD_H_
 
 
+#define MAX(a,b)  (((a)>(b)) ? (a) : (b))
+
+
 #ifdef __AVX__
     
     #define SIMD_MESSAGE "Using AVX instruction set"
@@ -48,10 +51,47 @@
     }
 
 #else
+#if defined __ARM_NEON__ || defined __ARM_NEON__
+
+    #define SIMD_MESSAGE "Using NEON instruction set"
+
+    #include <arm_neon.h>
+    
+    // Number of bytes in SIMD registers
+    #define NSIMDBYTES 16
+    
+    typedef float32x4 simdsf_t;
+    
+    static inline simdsf_t simdsf_sqrt( simdsf_t x  )
+    {
+        return (1.f / vrsqrteq_f32(x));
+    }
+    
+    
+    static inline simdsf_t simdsf_max( simdsf_t x, simdsf_t y )
+    {
+        simdsf_t z;
+        
+        for (int i = 0; i < 4; ++i)
+            z[i] = MAX( x[i], y[i] );
+        
+        return z;
+    }
+    
+    
+    inline static simdsf_t simdsf_init( float x ) 
+    { 
+        simdsf_t sx = {x,x,x,x};
+        return ( sx ); 
+    }
+    
+
+#else
 
     #define SIMD_MESSAGE "Neither SSE nor AVX instruction set available - no compilation possible"
     #error SIMD_MESSAGE 
 
+#endif // __NEON__
 #endif // __SSE__
 #endif // __AVX__
 
