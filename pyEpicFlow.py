@@ -7,7 +7,8 @@ Created on Thu Sep 14 20:51:07 2017
 
 from __future__ import print_function
 
-__all__ = [ "computeEpicFlow", "IllegalEpicFlowArgumentError", \
+__all__ = [ "computeEpicFlow", "computeSobelEdges", \
+            "IllegalEpicFlowArgumentError", \
             "defaultVariationalParams", "defaultEpicFlowParams", \
             "sintelParams", "kittiParams", "middleburyParams" ]
 
@@ -86,6 +87,10 @@ def _convert2RowAlignedArray( fOrigArray, fAlignedTo=16 ):
 
 
 
+def _memId( fNdArray ):
+    return fNdArray.ctypes.data
+    
+    
 ####################################################################################
 
 
@@ -178,14 +183,17 @@ class _float_image_t( ct.Structure ):
     m_ndImage = None    
     
     @classmethod
-    def fromArray( cls, f_ndimage ):
-        f_ndimage = np.ascontiguousarray( f_ndimage, dtype=np.float32 )
+    def fromArray( cls, f_ndimage, doCopy=False ):
+        l_ndimage = np.ascontiguousarray( f_ndimage, dtype=np.float32 )
         
-        assert( f_ndimage.strides[1] == f_ndimage.itemsize )
-        assert( _isAligned( f_ndimage ) )
+        if doCopy and (_memId( l_ndimage ) == _memId( f_ndimage ) ):
+            l_ndimage = np.ascontiguousarray( l_ndimage.copy(), dtype=np.float32 )
         
-        obj = cls( _ndarray2pointer( f_ndimage ), f_ndimage.shape[1], f_ndimage.shape[0] )
-        obj.m_ndImage = f_ndimage
+        assert( l_ndimage.strides[1] == l_ndimage.itemsize )
+        assert( _isAligned( l_ndimage ) )
+        
+        obj = cls( _ndarray2pointer( l_ndimage ), l_ndimage.shape[1], l_ndimage.shape[0] )
+        obj.m_ndImage = l_ndimage
         
         return obj
     
@@ -340,13 +348,10 @@ class IllegalEpicFlowArgumentError(ValueError):
 
 
 
-def _memId( fNdArray ):
-    return fNdArray.ctypes.data
-
 
 def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFlowParams=None, fAllowEdgeImgModification=False ):
     
-    if None == fEdgeImg:
+    if fEdgeImg is None:
         fEdgeImg = computeSobelEdges( fImg1 )
     
     if fImg1.shape != fImg2.shape:
@@ -359,17 +364,13 @@ def computeEpicFlow( fImg1, fImg2, fEdgeImg, fMatches, fVariParams=None, fEpicFl
     lImg1    = _color_image_t.fromArray( fImg1 )
     lImg2    = _color_image_t.fromArray( fImg2 )
     
-    lEdgeImg = _float_image_t.fromArray( fEdgeImg )
+    lEdgeImg = _float_image_t.fromArray( fEdgeImg, doCopy=(not fAllowEdgeImgModification) )
     lMatches = _float_image_t.fromArray( fMatches )
     
-    # check if a copy of fEdgeImg is required
-    if (not fAllowEdgeImgModification) and (_memId( fEdgeImg ) == _memId( lEdgeImg.m_ndImage ) ):
-        lEdgeImg = _float_image_t.fromArray( lEdgeImg.m_ndImage )
-    
-    if None == fVariParams:
+    if fVariParams is None:
         fVariParams = defaultVariationalParams()
     
-    if None == fEpicFlowParams:
+    if fEpicFlowParams is None:
         fEpicFlowParams = defaultEpicFlowParams()
     
     # create Output Memory
