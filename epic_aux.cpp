@@ -7,7 +7,8 @@
 #include <limits>
 #include <cstring>
 #include <cassert>
-
+#include <iterator>
+#include <cfloat>
 
 
 // include sgels from blas to solve overdetermined linear system
@@ -47,10 +48,12 @@ struct smallest_on_top {
 };
 
 /* Find nearest neighbors in a weighted directed graph (The matrix must be symmetric !) */
-static int find_nn_graph_arr( ccore::csr_matrix* graph, int seed, int nmax, int* best, float* dist ) {
+static int find_nn_graph_arr( const ccore::csr_matrix* graph, int seed, int nmax, int* best, float* dist ) {
 
-    assert(nmax>0);
-    assert( graph->nr==graph->nc && (graph->indptr[graph->nr]%2==0) );
+    assert( nmax>0 );
+    assert( (graph->nr == graph->nc) && ( 0 == (graph->indptr[graph->nr] % 2 )) );
+    assert( int(-1) == best[0]  );
+    assert( std::isinf(dist[0]) );
     const int* indptr = graph->indptr;
 
     // init done to INF
@@ -74,6 +77,10 @@ static int find_nn_graph_arr( ccore::csr_matrix* graph, int seed, int nmax, int*
         n++;
         if( n>= nmax ) break;
         
+        // lazy check for correct initializaiton
+        assert( int(-1) == best[n]  );
+        assert( std::isinf(dist[n]) );
+        
         // find nearest neighbors
         for(int i=indptr[cur.node]; i<indptr[cur.node+1]; i++) {
             int neigh = graph->indices[i];
@@ -84,9 +91,6 @@ static int find_nn_graph_arr( ccore::csr_matrix* graph, int seed, int nmax, int*
         }
     }
 
-    // in case we do not get enough results
-    memset(best+n,0xFF,(nmax-n)*sizeof(int));
-    memset(dist+n,0x7F,(nmax-n)*sizeof(float));
     return n;
 }
 
@@ -342,8 +346,10 @@ void dist_trf_nnfield_subset( ccore::int_image* best, ccore::float_image* dist, 
   assert(dist->tx==nn);
   
   ccore::float_image dmap = {NULL,0,0};
-  ccore::int_image  nnf = {NEWA(int,ns*nn),nn,ns};
-  ccore::float_image dis = {NEWA(float,ns*nn),nn,ns};
+  
+  // initialize nearest neighbor indices and neigherst neighbor distances with out of range values
+  std::vector<int>   lNeigherstNeighborIndices( ns*nn, int(-1) );
+  std::vector<float> lNeigherstNeighborDistances( ns*nn, std::numeric_limits<float>::infinity() );
 
   // compute distance transform and build graph
   ccore::csr_matrix ngh = {NULL,NULL,NULL,0,0};
@@ -354,7 +360,13 @@ void dist_trf_nnfield_subset( ccore::int_image* best, ccore::float_image* dist, 
   #pragma omp parallel for num_threads(n_thread)
   #endif
   for(int n=0; n<ns; n++)
-    find_nn_graph_arr( &ngh, n, nn, nnf.pixels+n*nn, dis.pixels+n*nn );
+  {
+      const int lNumNeighbors = find_nn_graph_arr( &ngh, n, nn, &(lNeigherstNeighborIndices[n*nn]), &(lNeigherstNeighborDistances[n*nn]) );
+      
+      assert( (lNumNeighbors == nn)
+               || (     ( int(-1) == lNeigherstNeighborIndices[n*nn + lNumNeighbors] )
+                    &&    std::isinf( lNeigherstNeighborDistances[n*nn + lNumNeighbors]) ) );
+  }
   free(ngh.indptr);
   free(ngh.indices);
   free(ngh.data);  
@@ -368,13 +380,11 @@ void dist_trf_nnfield_subset( ccore::int_image* best, ccore::float_image* dist, 
     // this pixel is at distance <d> from seed <s>
     int s = labels->pixels[i];
     float d = dmap.pixels[i];
-    memcpy(best->pixels+_i*nn,nnf.pixels+s*nn,nn*sizeof(nn));
+    memcpy( best->pixels+_i*nn, &(lNeigherstNeighborIndices[s*nn]), nn * sizeof(int) );
     for(int j=0; j<nn; j++)
-      dist->pixels[_i*nn+j] = d+dis.pixels[s*nn+j];  // distance plus constant
+      dist->pixels[_i*nn+j] = d+lNeigherstNeighborDistances[s*nn+j];  // distance plus constant
   }
   
-  free(nnf.pixels);
-  free(dis.pixels);
   free(dmap.pixels);
 }
 
