@@ -56,20 +56,25 @@ static int find_nn_graph_arr( const ccore::csr_matrix* graph, int seed, int nmax
     assert( std::isinf(dist[0]) );
     const int* indptr = graph->indptr;
 
-    // init done to INF
+    // done for keeping minimal distances
     float done[graph->nr];
-    memset(done,0x7F,graph->nr*sizeof(float));
+    // bit field indicating already visited nodes
+    std::vector<bool> lVisited( graph->nr, false );
   
     // explore nodes in order of increasing distances
     std::priority_queue<current_t,std::vector<current_t>,smallest_on_top<current_t> > stack;
     stack.emplace(seed,0);
-    done[seed] = 0;  // mark as done
+    done[seed] = 0;
+    lVisited[seed] = true; // mark as done
   
     int n=0;
-    while(stack.size()) {
+    while( 0 < stack.size() ) {
         current_t cur = stack.top();
         stack.pop();
-        if(cur.dis > done[cur.node]) continue;
+        
+        assert( lVisited[cur.node] );
+        if(cur.dis > done[cur.node])
+            continue;
         
         // insert result
         best[n] = cur.node;
@@ -82,12 +87,17 @@ static int find_nn_graph_arr( const ccore::csr_matrix* graph, int seed, int nmax
         assert( std::isinf(dist[n]) );
         
         // find nearest neighbors
-        for(int i=indptr[cur.node]; i<indptr[cur.node+1]; i++) {
+        for(int i=indptr[cur.node]; i<indptr[cur.node+1]; i++)
+        {
             int neigh = graph->indices[i];
             float newd = cur.dis + graph->data[i];
-            if( newd>=done[neigh] ) continue;
-            stack.emplace(neigh, newd); // add only if it makes sense
-            done[neigh] = newd;
+            
+            if( (!lVisited[neigh]) || (newd < done[neigh]) )
+            {
+                stack.emplace(neigh, newd); // add only if it makes sense
+                done[neigh] = newd;
+                lVisited[neigh] = true;
+            }
         }
     }
 
