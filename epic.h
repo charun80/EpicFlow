@@ -1,6 +1,16 @@
+#ifndef ___EPIC_H___
+#define ___EPIC_H___
+
+
 /* This file contains the main functions for the sparse-to-dense interpolation */
 #include "array_types.h"
 #include "image.h"
+
+
+
+namespace epic
+{
+
 
 /* parameter of epic */
 typedef struct epic_params_s {
@@ -29,5 +39,17 @@ extern "C" DLL_PUBLIC void epic_params_default(epic_params_t* params);
     params                 parameters
     n_thread               number of threads
 */
-void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_image *input_matches, float_image* edges, const epic_params_t* params, const int n_thread);
+void epic( ccore::image_t *flowx, ccore::image_t *flowy, 
+           const ccore::color_image_t *im,
+           const ccore::float_image *input_matches,
+           ccore::float_image* edges,
+           const epic_params_t* params, 
+           const int n_thread);
 
+
+
+} // namespace epic
+
+
+
+#endif // ___EPIC_H___

@@ -1,13 +1,14 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef __IMAGE_H_
 #define __IMAGE_H_
 
-#include <stdio.h>
 
-#define MINMAX(a,b) MIN( MAX(a,0) , b-1 )
+#ifdef __cplusplus
+namespace ccore {
+extern "C" {
+#endif
+
+
+
 
 /********** STRUCTURES *********/
 
@@ -97,8 +98,12 @@ color_image_t *rgb_to_lab(const color_image_t *im);
 /* compute the saliency of a given image */
 image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix );
 
-#endif
+
 
 #ifdef __cplusplus
-}
+}  // extern C
+}  // namespace ccore
 #endif
+
+#endif // __IMAGE_H_
+

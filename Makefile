@@ -4,8 +4,8 @@ CC=gcc
 LAPACKCFLAGS=#-DTHREADEDLAPACK
 LAPACKLDFLAGS=-L/usr/lib64/atlas/ -llapack
 
-CFLAGS=-DFINTEGER=int -fPIC -Wall -O3 -march=native -msse4 $(LAPACKCFLAGS) -fvisibility=hidden -fstack-protector-strong -Wformat -Werror=format-security -fopenmp -DUSE_OPENMP
-LDFLAGS=-fPIC -Wall -O3 -march=native -msse4 -ljpeg -lpng $(LAPACKLDFLAGS) -fopenmp 
+CFLAGS=-fPIC -Wall -O3 -march=native -fsigned-char $(LAPACKCFLAGS) -fvisibility=hidden -fstack-protector-strong -Wformat -Werror=format-security # -fopenmp -DUSE_OPENMP
+LDFLAGS=-Wall -O3 -ljpeg -lpng  $(LAPACKLDFLAGS) # -fopenmp 
 
 TARGET_LIB = libctypesEpicFlow.so # target lib
 
@@ -13,8 +13,9 @@ TARGET_LIB = libctypesEpicFlow.so # target lib
 #SOURCES_C := $(shell find . -name '*.c')
 
 COMMONOBJ=epic_aux.o epic.o image.o io.o solver.o variational_aux.o variational.o
-EXECOBJ=io.o epicflow.o
+EXECOBJ=io.o epicflow.o tictoc.o
 PYLIBOBJ=ctypesEpicFlow.o
+
 
 OBJ := $(SOURCES_CPP:%.cpp=%.o) $(SOURCES_C:%.c=%.o) 
 HEADERS := $(shell find . -name '*.h')
