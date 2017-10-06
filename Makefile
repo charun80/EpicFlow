@@ -4,10 +4,10 @@ CC=gcc
 LAPACKCFLAGS=#-DTHREADEDLAPACK
 LAPACKLDFLAGS=-L/usr/lib64/atlas/ -llapack
 
-CFLAGS=-DFINTEGER=int -fPIC -Wall -O3 -mavx $(LAPACKCFLAGS) # -ggdb -fopenmp -DUSE_OPENMP
-#CFLAGS=-DFINTEGER=int -fPIC -ggdb -Wall -O2 -march=native $(LAPACKCFLAGS) #  -ggdb -fopenmp -DUSE_OPENMP
-LDFLAGS=-fPIC -Wall -O3 -mavx -ljpeg -lpng $(LAPACKLDFLAGS)  # ggdb  -fopenmp 
-#LDFLAGS=-fPIC -Wall -ggdb -O2 -march=native -ljpeg -lpng $(LAPACKLDFLAGS)  # -ggdb  -fopenmp 
+CFLAGS= -fPIC -Wall -O3 -mavx -fsigned-char $(LAPACKCFLAGS) # -ggdb3 -fopenmp -DUSE_OPENMP
+#CFLAGS= -fPIC -Wall -O3 -march=native -fsigned-char $(LAPACKCFLAGS) # -ggdb3 -fopenmp -DUSE_OPENMP
+LDFLAGS=-Wall -O3 -ljpeg -lpng $(LAPACKLDFLAGS)  # ggdb3  -fopenmp 
+
 
 
 SOURCES_CPP := $(shell find . -name '*.cpp')
