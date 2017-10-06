@@ -2,7 +2,10 @@
 #define __SIMD_H_
 
 
-#define MAX(a,b)  (((a)>(b)) ? (a) : (b))
+#ifdef __cplusplus
+    #include <cstddef>
+#endif
+
 
 
 #ifdef __AVX__
@@ -51,7 +54,7 @@
     }
 
 #else
-#if defined __ARM_NEON__ || defined __ARM_NEON__
+#if defined __ARM_NEON__ || defined __ARM_NEON
 
     #define SIMD_MESSAGE "Using NEON instruction set"
 
@@ -60,7 +63,7 @@
     // Number of bytes in SIMD registers
     #define NSIMDBYTES 16
     
-    typedef float32x4 simdsf_t;
+    typedef float32x4_t simdsf_t;
     
     static inline simdsf_t simdsf_sqrt( simdsf_t x  )
     {
@@ -70,12 +73,17 @@
     
     static inline simdsf_t simdsf_max( simdsf_t x, simdsf_t y )
     {
+        #define SIMDSF_MAX(a,b)  (((a)>(b)) ? (a) : (b))
+        
+        
         simdsf_t z;
         
         for (int i = 0; i < 4; ++i)
-            z[i] = MAX( x[i], y[i] );
+            z[i] = SIMDSF_MAX( x[i], y[i] );
         
         return z;
+        
+        #undef SIMDSF_MAX
     }
     
     

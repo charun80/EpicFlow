@@ -407,6 +407,8 @@ color_image_t *color_image_png_load( FILE* fp, const char* file_name ){
 
 /* load a color image from a file */
 color_image_t *color_image_load(const char *fname){
+    assert( sizeof(char) == 1 );
+    
     FILE *fp;
     char magic[2];
     unsigned short *magic_short = (unsigned short *) magic;
@@ -417,16 +419,36 @@ color_image_t *color_image_load(const char *fname){
     }
     safeFRead(magic, sizeof(char), 2, fp);
     rewind(fp);
-    if(magic_short[0] == 0xd8ff){
-        image = color_image_jpeg_load(fp);
-    } else if(magic[0]=='P' && (magic[1]=='6' || magic[1]=='5')){ /* PPM raw */
-        image = color_image_pnm_load(fp);
-    } else if( magic[0]==-119 && magic[1]=='P' ) {
-      image = color_image_png_load( fp, fname );
-    } else{
-        fprintf(stderr, "Error in color_image_load(%s) - image format not supported, can only read jpg or ppm\n",fname);
-        exit(1);
+    
+    printf("File %s has magic header number 0x%02x\n", fname, *magic_short );
+        
+    switch (*magic_short)
+    {
+        case 0xd8ff:
+        {
+            printf("... Loading jpeg\n");
+            image = color_image_jpeg_load(fp);
+            break;
+        }
+        case 0x5089:
+        {
+            printf("... Loading png\n");
+            image = color_image_png_load( fp, fname );
+            break;
+        }
+        default:
+        {
+            if(magic[0]=='P' && (magic[1]=='6' || magic[1]=='5')) {
+                image = color_image_pnm_load(fp);
+            }
+            else{
+                fprintf(stderr, "Error in color_image_load(%s) - image format not supported, can only read jpg or ppm\n",fname);
+                fclose(fp);
+                exit(1);
+            }
+        }
     }
+    
     fclose(fp);
     return image;
 }
