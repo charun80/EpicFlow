@@ -170,8 +170,8 @@ static float weighted_distance_transform( const ccore::float_image* cost, const 
   assert( dt_params->min_change >= 0 );
   assert(labels);
 
-  const char x[4] = {-1,1,1,-1};
-  const char y[4] = {1,1,-1,-1};
+  const char x[4] = {char(-1), char(1), char(1),  char(-1)};
+  const char y[4] = {char(1),  char(1), char(-1), char(-1)};
   int i = 0, end_iter = 4;
   float change = -1;
   while(++i <= end_iter) {
