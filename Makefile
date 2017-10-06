@@ -4,8 +4,8 @@ CC=gcc
 LAPACKCFLAGS=#-DTHREADEDLAPACK
 LAPACKLDFLAGS=-L/usr/lib64/atlas/ -llapack
 
-CFLAGS=-fPIC -Wall -O3 -march=native -fsigned-char $(LAPACKCFLAGS) -fvisibility=hidden -fstack-protector-strong -Wformat -Werror=format-security # -fopenmp -DUSE_OPENMP
-LDFLAGS=-Wall -O3 -ljpeg -lpng  $(LAPACKLDFLAGS) # -fopenmp 
+CFLAGS=-fPIC -Wall -Wstrict-aliasing=3 -fno-strict-aliasing -O3 -march=native -fsigned-char $(LAPACKCFLAGS) -fvisibility=hidden -fstack-protector-strong -Wformat -Werror=format-security # -fopenmp -DUSE_OPENMP
+LDFLAGS=-Wall -O3 -fno-strict-aliasing -ljpeg -lpng  $(LAPACKLDFLAGS) # -fopenmp 
 
 TARGET_LIB = libctypesEpicFlow.so # target lib
 
