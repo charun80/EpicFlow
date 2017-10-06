@@ -94,7 +94,7 @@ static int find_nn_graph_arr( ccore::csr_matrix* graph, int seed, int nmax, int*
 /******************* DISTANCE TRANSFORM **************/
 
 static float arg_sweep( const ccore::float_image* cost, ccore::float_image* res, ccore::int_image* labels, const char x, const char y ) {
-  int i, j;
+  
   const int tx = res->tx, ty = res->ty;
   float* A = res->pixels;
   int* L = labels->pixels;
@@ -105,20 +105,21 @@ static float arg_sweep( const ccore::float_image* cost, ccore::float_image* res,
   const int ex = x>0 ? tx : -1;
   const int ey = y>0 ? ty : -1;
   
-  float t0, t1, t2, C, max_diff = 0.0;
+  float t0, t1, t2, C, max_diff = 0.0f;
   int l0, l1, l2;
-  for(j=by; j!=ey; j+=y)
-    for(i=bx; i!=ex; i+=x) {
+  for(int j = by; j != ey; j += y)
+    for( int i = bx; i != ex; i += x )
+    {
       if(j==by) {
         t1 = INF;
-        l1 = -1;
+        l1 = -1.f;
       } else {
         t1 = A[i + (j-y)*tx];
         l1 = L[i + (j-y)*tx];
       }
       if(i==bx) {
         t2 = INF;
-        l2 = -1;
+        l2 = -1.f;
       } else {
         t2 = A[i-x + j*tx];
         l2 = L[i-x + j*tx];
@@ -135,7 +136,7 @@ static float arg_sweep( const ccore::float_image* cost, ccore::float_image* res,
           l0 = l2;
         }
       } else {
-        t0 = 0.5*(t1 + t2 + sqrtf(2*C*C - dt12*dt12));
+        t0 = 0.5f*(t1 + t2 + sqrtf(2.f*C*C - dt12*dt12));
         l0 = (t1<t2) ? l1 : l2;
       }
       
