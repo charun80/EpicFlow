@@ -9,6 +9,7 @@ CFLAGS=-DFINTEGER=int -fPIC -Wall -O3 -mavx $(LAPACKCFLAGS) # -ggdb -fopenmp -DU
 LDFLAGS=-fPIC -Wall -O3 -mavx -ljpeg -lpng $(LAPACKLDFLAGS)  # ggdb  -fopenmp 
 #LDFLAGS=-fPIC -Wall -ggdb -O2 -march=native -ljpeg -lpng $(LAPACKLDFLAGS)  # -ggdb  -fopenmp 
 
+
 SOURCES_CPP := $(shell find . -name '*.cpp')
 SOURCES_C := $(shell find . -name '*.c')
 OBJ := $(SOURCES_CPP:%.cpp=%.o) $(SOURCES_C:%.c=%.o) 

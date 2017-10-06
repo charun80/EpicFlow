@@ -10,7 +10,6 @@
 
 
 
-
 #ifdef __cplusplus
 namespace ccore
 {
