@@ -17,6 +17,8 @@ import os
 _EpicLibName = 'libctypesEpicFlow.so'
 _EpicLibPath = os.path.dirname( os.path.abspath(__file__) )
 
+_ArrayAlignment = None
+
 _VariParamDefaultCall = None
 _EpicFlowParamDefaultCall = None
 _EpicFlowCall = None
@@ -36,15 +38,15 @@ _floatPtr = ct.POINTER(ct.c_float)
 _ndarray2pointer = lambda ndarray: _floatPtr( as_ctypes( ndarray ) )
 
 
-def _isAligned( fNdArray, fAlignedTo=16 ):
-    rest = fNdArray.ctypes.data % fAlignedTo
+def _isAligned( fNdArray ):
+    rest = fNdArray.ctypes.data % _ArrayAlignment
     if (0 == rest):
         return True
     
     return False
 
 
-def _isRowAligned( fNdArray, fAlignedTo=16 ):
+def _isRowAligned( fNdArray ):
     lNRows = np.prod( fNdArray.shape[:-1] )
     fNdArray = fNdArray.reshape( (lNRows, fNdArray.shape[-1] ) )
     rowAligned = np.array( [ _isAligned( fNdArray[i,:] ) for i in xrange( lNRows ) ], dtype=np.bool )
@@ -53,20 +55,20 @@ def _isRowAligned( fNdArray, fAlignedTo=16 ):
 
 
 
-def _rowAlignedArray( shape, dtype, fConstructor=np.empty, fAlignedTo=16 ):
+def _rowAlignedArray( shape, dtype, fConstructor=np.empty ):
     lNCols = shape[-1]
     dtype = np.dtype( dtype )
     
     # Number of bytes in each row stride    
-    lNRowStride = ((lNCols * dtype.itemsize + fAlignedTo - 1) / fAlignedTo) * fAlignedTo
+    lNRowStride = ((lNCols * dtype.itemsize + _ArrayAlignment - 1) / _ArrayAlignment) * _ArrayAlignment
     assert( 0 == (lNRowStride % dtype.itemsize) )
     
     # Creating Buffer
     lNBytes = np.prod(shape[:-1]) * lNRowStride
-    lBuf = fConstructor( lNBytes + fAlignedTo, dtype=np.uint8 )
+    lBuf = fConstructor( lNBytes + _ArrayAlignment, dtype=np.uint8 )
     
     # Creating array
-    lStartIndex = -lBuf.ctypes.data % fAlignedTo
+    lStartIndex = -lBuf.ctypes.data % _ArrayAlignment
     lArray = lBuf[lStartIndex:(lStartIndex+lNBytes)].view(dtype).reshape( shape[:-1] + (lNRowStride / dtype.itemsize,))
     
     # cut overhanging part
@@ -74,14 +76,14 @@ def _rowAlignedArray( shape, dtype, fConstructor=np.empty, fAlignedTo=16 ):
         lSlice = ((len(shape) - 1) * (slice(None),)) + (slice(None,lNCols),)
         lArray = lArray[lSlice]
     
-    assert( 0 == (lArray.strides[0] % fAlignedTo) )
+    assert( 0 == (lArray.strides[0] % _ArrayAlignment) )
     assert( _isRowAligned(lArray) )
     
     return lArray
 
 
-def _convert2RowAlignedArray( fOrigArray, fAlignedTo=16 ):
-    nArray = _rowAlignedArray( fOrigArray.shape, fOrigArray.dtype, np.empty, fAlignedTo )
+def _convert2RowAlignedArray( fOrigArray ):
+    nArray = _rowAlignedArray( fOrigArray.shape, fOrigArray.dtype, np.empty )
     nArray[:] = fOrigArray[:]
     return nArray
 
@@ -190,7 +192,6 @@ class _float_image_t( ct.Structure ):
             l_ndimage = np.ascontiguousarray( l_ndimage.copy(), dtype=np.float32 )
         
         assert( l_ndimage.strides[1] == l_ndimage.itemsize )
-        assert( _isAligned( l_ndimage ) )
         
         obj = cls( _ndarray2pointer( l_ndimage ), l_ndimage.shape[1], l_ndimage.shape[0] )
         obj.m_ndImage = l_ndimage
@@ -240,6 +241,13 @@ class _variational_params_t( ct.Structure ):
 
 def _loadEpicFlowLibrary():
     eflib = np.ctypeslib.load_library( _EpicLibName, _EpicLibPath )
+    
+    # get array alignment
+    GetArrayAligmentCall = eflib.getArrayAlignment
+    GetArrayAligmentCall.restype = ct.c_size_t
+    global _ArrayAlignment
+    _ArrayAlignment = int( GetArrayAligmentCall() )
+    assert( (0 < _ArrayAlignment) and (0 == (_ArrayAlignment % 4)) )
     
     # variational parameters
     global _VariParamDefaultCall

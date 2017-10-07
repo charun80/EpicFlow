@@ -1,12 +1,15 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef __VARIATIONAL_AUX_H_
 #define __VARIATIONAL_AUX_H_
 
-#include <stdlib.h>
+
 #include "image.h"
+
+
+#ifdef __cplusplus
+namespace ccore {
+extern "C" {
+#endif
+
 
 /* warp a color image according to a flow. src is the input image, wx and wy, the input flow. dst is the warped image and mask contains 0 or 1 if the pixels goes outside/inside image boundaries */
 void image_warp(color_image_t *dst, image_t *mask, const color_image_t *src, const image_t *wx, const image_t *wy);
@@ -28,8 +31,12 @@ image_t* compute_dpsis_weight(color_image_t *im, float coef, const convolution_t
    other (color) images are input */
 void compute_data_and_match(image_t *a11, image_t *a12, image_t *a22, image_t *b1, image_t *b2, image_t *mask, image_t *du, image_t *dv, color_image_t *Ix, color_image_t *Iy, color_image_t *Iz, color_image_t *Ixx, color_image_t *Ixy, color_image_t *Iyy, color_image_t *Ixz, color_image_t *Iyz, const float half_delta_over3, const float half_gamma_over3);
 
-#endif
+
 
 #ifdef __cplusplus
-}
+}  // extern C
+}  // ccore
 #endif
+
+
+#endif // __VARIATIONAL_AUX_H_

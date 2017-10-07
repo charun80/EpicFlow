@@ -1,21 +1,34 @@
-#include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "variational.h"
 #include "variational_aux.h"
 #include "solver.h"
 
+#include "simd.h"
 
-#include <xmmintrin.h>
-typedef __v4sf v4sf;
+
+
+#ifdef __cplusplus
+namespace ccore
+{
+#endif
+
+
 
 convolution_t *deriv, *deriv_flow;
 float half_alpha, half_delta_over3, half_gamma_over3;
 
 
 /* perform flow computation at one level of the pyramid */
-void compute_one_level(image_t *wx, image_t *wy, color_image_t *im1, color_image_t *im2, const variational_params_t *params){ 
+static void compute_one_level( image_t *wx,
+                               image_t *wy,
+                               color_image_t *im1,
+                               color_image_t *im2,
+                               const variational_params_t *params)
+{ 
     const int width = wx->width, height = wx->height, stride=wx->stride;
 
     image_t *du = image_new(width,height), *dv = image_new(width,height), // the flow increment
@@ -53,11 +66,17 @@ void compute_one_level(image_t *wx, image_t *wy, color_image_t *im1, color_image
             sub_laplacian(b1, wx, smooth_horiz, smooth_vert);
             sub_laplacian(b2, wy, smooth_horiz, smooth_vert);
             // solve system
-            sor_coupled(du, dv, a11, a12, a22, b1, b2, smooth_horiz, smooth_vert, params->niter_solver, params->sor_omega);          
+            sor_coupled(du, dv, a11, a12, a22, b1, b2, smooth_horiz, smooth_vert, params->niter_solver, params->sor_omega);
+            
             // update flow plus flow increment
-            int i;
-            v4sf *uup = (v4sf*) uu->data, *vvp = (v4sf*) vv->data, *wxp = (v4sf*) wx->data, *wyp = (v4sf*) wy->data, *dup = (v4sf*) du->data, *dvp = (v4sf*) dv->data;
-            for( i=0 ; i<height*stride/4 ; i++){
+            simdsf_t *uup = simdsf_ptrcast( uu->data ),
+                     *vvp = simdsf_ptrcast( vv->data ),
+                     *wxp = simdsf_ptrcast( wx->data ),
+                     *wyp = simdsf_ptrcast( wy->data ),
+                     *dup = simdsf_ptrcast( du->data ),
+                     *dvp = simdsf_ptrcast( dv->data );
+            for( int i=0 ; i < (height * stride / NSimdFloats); i++)
+            {
                 (*uup) = (*wxp) + (*dup);
                 (*vvp) = (*wyp) + (*dvp);
                 uup+=1; vvp+=1; wxp+=1; wyp+=1;dup+=1;dvp+=1;
@@ -80,6 +99,7 @@ void compute_one_level(image_t *wx, image_t *wy, color_image_t *im1, color_image
     color_image_delete(Ixx); color_image_delete(Ixy); color_image_delete(Iyy); color_image_delete(Ixz); color_image_delete(Iyz);
 }
 
+
 /* set flow parameters to default */
 DLL_PUBLIC void variational_params_default(variational_params_t *params){
     if(!params){
@@ -97,7 +117,11 @@ DLL_PUBLIC void variational_params_default(variational_params_t *params){
 }
   
 /* Compute a refinement of the optical flow (wx and wy are modified) between im1 and im2 */
-void variational(image_t *wx, image_t *wy, const color_image_t *im1, const color_image_t *im2, const variational_params_t *params)
+void variational(image_t *wx,
+                 image_t *wy,
+                 const color_image_t *im1,
+                 const color_image_t *im2,
+                 const variational_params_t *params)
 {
 
     // initialize global variables
@@ -129,4 +153,10 @@ void variational(image_t *wx, image_t *wy, const color_image_t *im1, const color
     convolution_delete(deriv);
     convolution_delete(deriv_flow);
 }
+
+
+
+#ifdef __cplusplus
+}  // namespace ccore
+#endif
 

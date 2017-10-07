@@ -1,6 +1,6 @@
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
+#include <cstring>
+#include <cmath>
+#include <iostream>
 
 #include "epic.h"
 #include "image.h"
@@ -10,6 +10,15 @@
 #include "omp.h"
 
 #include "io.h"
+
+
+
+namespace epic
+{
+
+
+using namespace ccore;
+
 
 /* create a copy of input matches with 4 columns, with all points inside the image area*/
 static float_image rectify_corres(const float_image* matches, const int w1, const int h1, const int w2, const int h2, const int n_thread){
@@ -77,7 +86,7 @@ static void apply_saliency_threshold(float_image *matches, const color_image_t *
 static void prefiltering( float_image *matches, const float_image *edges, const int nn, const float threshold, const float coef_kernel, const int n_thread){
     const float th2 = threshold*threshold;
     const int nns = MIN(nn+1, matches->ty); // nn closest plus itself
-    if( nns != nn+1 ) fprintf(stderr, "Warning: not enough matches for prefiltering\n");
+    if( nns != nn+1 ) std::cerr << "Warning: not enough matches for prefiltering" << std::endl;
     int_image seeds = matches_to_seeds(matches, n_thread);
     float_image vects = matches_to_vects(matches, n_thread);
     
@@ -92,7 +101,7 @@ static void prefiltering( float_image *matches, const float_image *edges, const 
     #pragma omp parallel for num_threads(n_thread)
     #endif
     for(int i=0 ; i<dis.tx*dis.ty ; i++){
-        dis.pixels[i] = expf(-coef_kernel*dis.pixels[i])+1e-08;
+        dis.pixels[i] = std::exp( -coef_kernel*dis.pixels[i] ) + 1e-08f;
     }
     
     // compute nadaraya-watson estimation
@@ -144,11 +153,17 @@ DLL_PUBLIC void epic_params_default(epic_params_t* params){
     params                 parameters
     n_thread               number of threads
 */
-void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_image *input_matches, float_image* edges, const epic_params_t* params, const int n_thread){   
+void epic( image_t *flowx, image_t *flowy, 
+           const color_image_t *im,
+           const float_image *input_matches,
+           float_image* edges,
+           const epic_params_t* params, 
+           const int n_thread)
+{
 
     // copy matches and correct them if necessary
     float_image matches = rectify_corres(input_matches, im->width, im->height, im->width, im->height, n_thread);
-    if( params->verbose ) printf("%d input matches\n", matches.ty);
+    if( params->verbose ) std::cout << matches.ty << " input matches" << std::endl;
     
         
     // eventually add a constant to edges cost
@@ -165,18 +180,18 @@ void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_i
     // saliency filter
     if(params->saliency_th){
         apply_saliency_threshold( &matches, im, params->saliency_th);
-        if( params->verbose ) printf("Saliency filtering, remaining %d matches\n", matches.ty);
+        if( params->verbose ) std::cout << "Saliency filtering, remaining " << matches.ty << " matches" << std::endl;
     }
     // consistency filter
     if(params->pref_nn){
         prefiltering( &matches, edges, params->pref_nn, params->pref_th, params->coef_kernel, n_thread);
-        if( params->verbose ) printf("Consistenct filter, remaining %d matches\n", matches.ty);
+        if( params->verbose ) std::cout << "Consistenct filter, remaining " << matches.ty << " matches" << std::endl;
     } 
       
     // prepare variables
     const int nns = MIN(params->nn, matches.ty);
-    if( nns < params->nn ) fprintf(stderr, "Warning: not enough matches for interpolating\n");
-    if( params->verbose ) printf("Computing %d nearest neighbors for each match\n", nns);
+    if( nns < params->nn ) std::cerr <<  "Warning: not enough matches for interpolating" << std::endl;
+    if( params->verbose ) std::cout << "Computing " << nns << " nearest neighbors for each match" << std::endl;
     int_image seeds = matches_to_seeds(&matches, n_thread);
     float_image vects = matches_to_vects(&matches, n_thread);
     
@@ -191,11 +206,11 @@ void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_i
     #pragma omp parallel for num_threads(n_thread)
     #endif
     for(int i=0 ; i<dis.tx*dis.ty ; i++){
-        dis.pixels[i] = expf(-params->coef_kernel*dis.pixels[i])+1e-08;
+        dis.pixels[i] = std::exp( -params->coef_kernel*dis.pixels[i] ) + 1e-08f;
     }
     
     // interpolation
-    if( params->verbose ) printf("Interpolation of matches using %s\n", params->method);
+    if( params->verbose ) std::cout << "Interpolation of matches using " << params->method << std::endl;
     float_image newvects = empty_image( float, 2, im->width*im->height);
     if( !strcmp( params->method, "LA") ){
         float_image seedsaffine = empty_image(float, 6, vects.ty);
@@ -208,7 +223,7 @@ void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_i
         apply_nadarayawatson(&newvects, &seedsvects, &labels, n_thread);        
         free(seedsvects.pixels);
     } else {
-        fprintf(stderr, "method %s not recognized\n", params->method);
+        std::cerr <<  "method " << params->method << " not recognized" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -233,3 +248,7 @@ void epic(image_t *flowx, image_t *flowy, const color_image_t *im, const float_i
     free(matches.pixels);
 }
 
+
+
+
+} // namespace epic
