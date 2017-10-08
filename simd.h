@@ -65,25 +65,64 @@
     
     typedef float32x4_t simdsf_t;
     
+    static inline simdsf_t simdsf_reciprocal( simdsf_t x ) 
+    { 
+        float32x4_t estimate = vrecpeq_f32( x );
+        estimate = vmulq_f32(vrecpsq_f32( estimate, x ), estimate);
+        estimate = vmulq_f32(vrecpsq_f32( estimate, x ), estimate);
+        return estimate;
+    }
+
+    static inline float32x4_t __simdsf_rsqrt_1iteration( float32x4_t x, float32x4_t estimate)
+    {
+        float32x4_t estimate2 = vmulq_f32(estimate, x );
+        return vmulq_f32(estimate, vrsqrtsq_f32(estimate2, estimate));
+    }
+
+    static inline float32x4_t __simdsf_rsqrt1( float32x4_t x )
+    {
+        float32x4_t estimate = vrsqrteq_f32( x );
+        return __simdsf_rsqrt_1iteration( x, estimate );
+    }
+
+    static inline float32x4_t __simdsf_rsqrt2( float32x4_t x )
+    {
+        float32x4_t estimate = vrsqrteq_f32( x );
+        
+        estimate = __simdsf_rsqrt_1iteration( x, estimate );
+        return __simdsf_rsqrt_1iteration( x, estimate );
+    }
+
+    static inline float32x4_t __simdsf_rsqrt3( float32x4_t x )
+    {
+        float32x4_t estimate = vrsqrteq_f32( x );
+        
+        estimate = __simdsf_rsqrt_1iteration( x, estimate );
+        estimate = __simdsf_rsqrt_1iteration( x, estimate );
+        return __simdsf_rsqrt_1iteration( x, estimate );
+    }
+    
+    
+    static inline simdsf_t simdsf_rsqrt( simdsf_t x ) {
+        return __simdsf_rsqrt3( x );
+    }
+    
+    
+    
     static inline simdsf_t simdsf_sqrt( simdsf_t x  )
     {
-        return (1.f / vrsqrteq_f32(x));
+        // see https://github.com/scoopr/vectorial/blob/master/include/vectorial/simd4f_neon.h
+        
+        return vreinterpretq_f32_u32(vandq_u32( vtstq_u32(vreinterpretq_u32_f32(x),  
+                                                          vreinterpretq_u32_f32(x)), 
+                                                vreinterpretq_u32_f32( simdsf_reciprocal(simdsf_rsqrt(x)) )
+                                              ) );
     }
     
     
     static inline simdsf_t simdsf_max( simdsf_t x, simdsf_t y )
     {
-        #define SIMDSF_MAX(a,b)  (((a)>(b)) ? (a) : (b))
-        
-        
-        simdsf_t z;
-        
-        for (int i = 0; i < 4; ++i)
-            z[i] = SIMDSF_MAX( x[i], y[i] );
-        
-        return z;
-        
-        #undef SIMDSF_MAX
+        return vmaxq_f32( x, y );
     }
     
     
