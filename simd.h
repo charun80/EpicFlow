@@ -122,17 +122,7 @@
     
     static inline simdsf_t simdsf_max( simdsf_t x, simdsf_t y )
     {
-        #define SIMDSF_MAX(a,b)  (((a)>(b)) ? (a) : (b))
-        
-        
-        simdsf_t z;
-        
-        for (int i = 0; i < 4; ++i)
-            z[i] = SIMDSF_MAX( x[i], y[i] );
-        
-        return z;
-        
-        #undef SIMDSF_MAX
+        return vmaxq_f32( x, y );
     }
     
     
