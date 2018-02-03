@@ -260,13 +260,13 @@ static void convolve_vert_fast_3(image_t *dst, const image_t *src, const convolu
     //const float *coeff_accu = conv->coeffs_accu;
     simdsf_t *srcp = simdsf_ptrcast( src->data ), 
              *dstp = simdsf_ptrcast( dst->data );
-    simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
+    const simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
     int i;
     for(i=iterline ; --i ; ){ // first line
         *dstp = (coeff[0]+coeff[1])*(*srcp) + coeff[2]*(*srcp_p1);
         dstp+=1; srcp+=1; srcp_p1+=1;
     }
-    simdsf_t* srcp_m1 = simdsf_ptrcast( src->data ); 
+    const simdsf_t* srcp_m1 = simdsf_ptrcast( src->data ); 
     for(i=src->height-1 ; --i ; ){ // others line
         int j;
         for(j=iterline ; --j ; ){
@@ -286,19 +286,22 @@ static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolu
     //const float *coeff_accu = conv->coeffs_accu;
     simdsf_t *srcp = simdsf_ptrcast( src->data ), 
              *dstp = simdsf_ptrcast( dst->data );
-    simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
-    simdsf_t *srcp_p2 = simdsf_ptrcast( src->data + (2*src->stride) );
+    const simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
+    const simdsf_t *srcp_p2 = simdsf_ptrcast( src->data + (2*src->stride) );
+    
     int i;
     for(i=iterline ; --i ; ){ // first line
         *dstp = (coeff[0]+coeff[1]+coeff[2])*(*srcp) + coeff[3]*(*srcp_p1) + coeff[4]*(*srcp_p2);
         dstp+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
     }
-    simdsf_t* srcp_m1 = simdsf_ptrcast( src->data );
+    
+    const simdsf_t* srcp_m1 = simdsf_ptrcast( src->data );
     for(i=iterline ; --i ; ){ // second line
         *dstp = (coeff[0]+coeff[1])*(*srcp_m1) + coeff[2]*(*srcp) + coeff[3]*(*srcp_p1) + coeff[4]*(*srcp_p2);
         dstp+=1; srcp_m1+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
     }   
-    simdsf_t* srcp_m2 = simdsf_ptrcast( src->data );
+    
+    const simdsf_t* srcp_m2 = simdsf_ptrcast( src->data );
     for(i=src->height-3 ; --i ; ){ // others line
         int j;
         for(j=iterline ; --j ; ){
@@ -321,8 +324,8 @@ static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convol
     const int stride_minus_1 = src->stride-1;
     const int iterline = src->stride / NSimdFloats;
     const float *coeff = conv->coeffs;
-    simdsf_t *srcp = simdsf_ptrcast( src->data ), 
-             *dstp = simdsf_ptrcast( dst->data );
+    const simdsf_t *srcp = simdsf_ptrcast( src->data ); 
+          simdsf_t *dstp = simdsf_ptrcast( dst->data );
     
     // create shifted version of src
     float *src_p1 = NULL;
@@ -339,11 +342,14 @@ static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convol
     
     for( int j=0; j<src->height; j++){
         
-        float *srcptr = (float*) srcp;
+        const float *srcptr = (const float*)srcp;
         const float right_coef = srcptr[src->width-1];
-        for( int i = src->width; i < src->stride; i++)
-            srcptr[i] = right_coef;
-        
+        {
+            // HACK: this violates the const condition - but it changes only between stride and image border
+            float *srcptr_noconst = (float*)srcptr;
+            for( int i = src->width; i < src->stride; i++)
+                srcptr_noconst[i] = right_coef;
+        }
         src_m1[0] = srcptr[0];
         memcpy(src_m1+1, srcptr , sizeof(float)*stride_minus_1);
         src_p1[stride_minus_1] = right_coef;
@@ -370,8 +376,8 @@ static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convol
     const int iterline = src->stride / NSimdFloats;
     const float *coeff = conv->coeffs;
     
-    simdsf_t *srcp = simdsf_ptrcast( src->data ),
-             *dstp = simdsf_ptrcast( dst->data );
+    const simdsf_t *srcp = simdsf_ptrcast( src->data );
+          simdsf_t *dstp = simdsf_ptrcast( dst->data );
     
     float *src_p1 = NULL;
     {
@@ -389,11 +395,14 @@ static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convol
     
     for( int j=0;j<src->height;j++){
         
-        float *srcptr = (float*) srcp;
+        const float *srcptr = (const float*) srcp;
         const float right_coef = srcptr[src->width-1];
-        for( int i=src->width;i<src->stride;i++)
-            srcptr[i] = right_coef;
-        
+        {
+            // HACK: this violates the const condition - but it changes only between stride and image border
+            float *srcptr_noconst = (float*)srcptr;
+            for( int i=src->width;i<src->stride;i++)
+                srcptr_noconst[i] = right_coef;  
+        }
         src_m1[0] = srcptr[0];
         memcpy(src_m1+1, srcptr , sizeof(float)*stride_minus_1);
         src_m2[0] = srcptr[0];
@@ -430,14 +439,14 @@ void convolve_horiz(image_t *dest, const image_t *src, const convolution_t *conv
         convolve_horiz_fast_5(dest,src,conv);
         return;    
     }
-    float *in = src->data;
+    const float *in = src->data;
     float * out = dest->data;
     int i, j, ii;
     float *o = out;
     int i0 = -conv->order;
     int i1 = +conv->order;
-    float *coeff = conv->coeffs + conv->order;
-    float *coeff_accu = conv->coeffs_accu + conv->order;
+    const float *coeff = conv->coeffs + conv->order;
+    const float *coeff_accu = conv->coeffs_accu + conv->order;
     for(j = 0; j < src->height; j++){
         const float *al = in + j * src->stride;
         const float *f0 = coeff + i0;
@@ -480,8 +489,8 @@ void convolve_vert(image_t *dest, const image_t *src, const convolution_t *conv)
         convolve_vert_fast_5(dest,src,conv);
         return;    
     }
-    float *in = src->data;
-    float *out = dest->data;
+    const float *in = src->data;
+          float *out = dest->data;
     int i0 = -conv->order;
     int i1 = +conv->order;
     float *coeff = conv->coeffs + conv->order;
