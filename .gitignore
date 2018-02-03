@@ -1,6 +1,12 @@
+
+callgrind*
+*.cPickle
+*.dat
 epicflow
-*.so
+md5_*
 *.o
+*.png
 *.pyc
 *.pyo
-
+*.so
+*.valgrind
