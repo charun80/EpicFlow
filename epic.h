@@ -38,7 +38,7 @@ void epic_params_default(epic_params_t* params);
     n_thread               number of threads
 */
 void epic( ccore::image_t *flowx, ccore::image_t *flowy, 
-           const ccore::color_image_t *im,
+           const ccore::color_image_ct *im,
            const ccore::float_image *input_matches,
            ccore::float_image* edges,
            const epic_params_t* params, 

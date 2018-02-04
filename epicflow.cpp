@@ -49,8 +49,8 @@ int main(int argc, char **argv){
     }
 
     // read arguments
-    ccore::color_image_t *im1 = ccore::color_image_load(argv[1]);
-    ccore::color_image_t *im2 = ccore::color_image_load(argv[2]);
+    const ccore::color_image_ct *im1 = ccore::const_color_image_cast( ccore::color_image_load(argv[1]) );
+    const ccore::color_image_ct *im2 = ccore::const_color_image_cast( ccore::color_image_load(argv[2]) );
     ccore::float_image edges = ccore::read_edges(argv[3], im1->width, im1->height);
     ccore::float_image matches = ccore::read_matches(argv[4]);
     const char *outputfile = argv[5];
@@ -130,8 +130,8 @@ int main(int argc, char **argv){
     tt.tic();
     
     // compute interpolation and energy minimization
-    ccore::color_image_t *imlab = rgb_to_lab(im1);
-    epic::epic(wx, wy, imlab, &matches, &edges, &epic_params, 1);
+    ccore::color_image_t *imlab = rgb_to_lab( im1 );
+    epic::epic( wx, wy, ccore::const_color_image_cast( imlab ), &matches, &edges, &epic_params, 1 );
     // energy minimization
     ccore::variational(wx, wy, im1, im2, &flow_params);
     
@@ -140,9 +140,9 @@ int main(int argc, char **argv){
     // write output file and free memory
     ccore::writeFlowFile(outputfile, wx, wy);
     
-    ccore::color_image_delete(im1);
-    ccore::color_image_delete(imlab);
-    ccore::color_image_delete(im2);
+    ccore::color_image_delete( color_image_cast( im1 ) );
+    ccore::color_image_delete( imlab );
+    ccore::color_image_delete( color_image_cast( im2 ) );
     free(matches.pixels);
     free(edges.pixels);
     ccore::image_delete(wx);

@@ -29,8 +29,8 @@ void variational_params_default(variational_params_t *params);
 /* Compute a refinement of the optical flow (wx and wy are modified) between im1 and im2 */
 void variational(image_t *wx,
                  image_t *wy,
-                 const color_image_t *im1,
-                 const color_image_t *im2,
+                 const color_image_ct *im1,
+                 const color_image_ct *im2,
                  const variational_params_t *params);
 
 
