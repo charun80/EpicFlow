@@ -65,7 +65,7 @@ static float_image matches_to_vects(const float_image *matches, const int n_thre
 }
 
 /* remove matches coming from a pixel with a low saliency */
-static void apply_saliency_threshold(float_image *matches, const color_image_t *im, const float saliency_threshold){
+static void apply_saliency_threshold(float_image *matches, const color_image_ct *im, const float saliency_threshold){
     image_t *s = saliency(im, 0.8f, 1.0f);
     float_image tmp = empty_image(float, 4, matches->ty);
     int i, ii=0;
@@ -154,7 +154,7 @@ DLL_PUBLIC void epic_params_default(epic_params_t* params){
     n_thread               number of threads
 */
 void epic( image_t *flowx, image_t *flowy, 
-           const color_image_t *im,
+           const color_image_ct *im,
            const float_image *input_matches,
            float_image* edges,
            const epic_params_t* params, 

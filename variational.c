@@ -18,16 +18,74 @@ namespace ccore
 
 
 
-convolution_t *deriv, *deriv_flow;
-float half_alpha, half_delta_over3, half_gamma_over3;
+typedef struct variational_ext_params_s {
+    const variational_params_t* const p;
+    
+    const float half_alpha;
+    const float half_delta_over3;
+    const float half_gamma_over3;
+} variational_ext_params_t;
+
+
+
+static const convolution_ct* get_deriv()
+{
+    static const int order = 2;
+    static const int even = 0;
+    
+    static convolution_t derivSingleton = {0,NULL,NULL};
+    static float coeffs[5 /*2 * order + 1*/];
+    static float coeffs_accu[5 /*2 * order + 1*/];
+    
+    if (NULL == derivSingleton.coeffs)
+    {
+        {
+            const float deriv_filter[3] = {0.0f, -8.0f/12.0f, 1.0f/12.0f};
+            convolve_extract_coeffs(order, deriv_filter, coeffs, coeffs_accu, even);
+        }
+        
+        derivSingleton.order = order;
+        derivSingleton.coeffs = coeffs;
+        derivSingleton.coeffs_accu = coeffs_accu;
+    }
+    
+    return const_convolution_cast( &derivSingleton );
+}
+
+
+
+static const convolution_ct* get_deriv_flow()
+{
+    static const int order = 1;
+    static const int even = 0;
+    
+    static convolution_t derivFlowSingleton = {0,NULL,NULL};
+    static float coeffs[3 /*2 * order + 1*/];
+    static float coeffs_accu[3 /*2 * order + 1*/];
+    
+    if (NULL == derivFlowSingleton.coeffs)
+    {
+        {
+            const float deriv_filter_flow[2] = {0.0f, -0.5f};
+            convolve_extract_coeffs(order, deriv_filter_flow, coeffs, coeffs_accu, even);
+        }
+        
+        derivFlowSingleton.order = order;
+        derivFlowSingleton.coeffs = coeffs;
+        derivFlowSingleton.coeffs_accu = coeffs_accu;
+    }
+    
+    return const_convolution_cast( &derivFlowSingleton );
+}
+
 
 
 /* perform flow computation at one level of the pyramid */
 static void compute_one_level( image_t *wx,
                                image_t *wy,
-                               color_image_t *im1,
-                               color_image_t *im2,
-                               const variational_params_t *params)
+                               const color_image_ct *im1,
+                               const color_image_ct *im2,
+                               const variational_ext_params_t *params)
 { 
     const int width = wx->width, height = wx->height, stride=wx->stride;
 
@@ -43,15 +101,15 @@ static void compute_one_level( image_t *wx,
         *Ixx = color_image_new(width,height), *Ixy = color_image_new(width,height), *Iyy = color_image_new(width,height), *Ixz = color_image_new(width,height), *Iyz = color_image_new(width,height); // second order derivatives
   
   
-    image_t *dpsis_weight = compute_dpsis_weight(im1, 5.0f, deriv);  
+    const image_ct* const dpsis_weight = const_image_cast( compute_dpsis_weight( im1, 5.0f, get_deriv() ) );  
   
     int i_outer_iteration;
-    for(i_outer_iteration = 0 ; i_outer_iteration < params->niter_outer ; i_outer_iteration++){
+    for(i_outer_iteration = 0 ; i_outer_iteration < params->p->niter_outer ; i_outer_iteration++){
         int i_inner_iteration;
         // warp second image
-        image_warp(w_im2, mask, im2, wx, wy);
+        image_warp(w_im2, mask, im2, const_image_cast( wx ), const_image_cast( wy ) );
         // compute derivatives
-        get_derivatives(im1, w_im2, deriv, Ix, Iy, Iz, Ixx, Ixy, Iyy, Ixz, Iyz);
+        get_derivatives(im1, const_color_image_cast( w_im2 ), get_deriv(), Ix, Iy, Iz, Ixx, Ixy, Iyy, Ixz, Iyz);
         // erase du and dv
         image_erase(du);
         image_erase(dv);
@@ -59,14 +117,16 @@ static void compute_one_level( image_t *wx,
         memcpy(uu->data,wx->data,wx->stride*wx->height*sizeof(float));
         memcpy(vv->data,wy->data,wy->stride*wy->height*sizeof(float));
         // inner fixed point iterations
-        for(i_inner_iteration = 0 ; i_inner_iteration < params->niter_inner ; i_inner_iteration++){
+        for(i_inner_iteration = 0 ; i_inner_iteration < params->p->niter_inner ; i_inner_iteration++){
             //  compute robust function and system
-            compute_smoothness(smooth_horiz, smooth_vert, uu, vv, dpsis_weight, deriv_flow, half_alpha );
-            compute_data_and_match(a11, a12, a22, b1, b2, mask, du, dv, Ix, Iy, Iz, Ixx, Ixy, Iyy, Ixz, Iyz, half_delta_over3, half_gamma_over3);
-            sub_laplacian(b1, wx, smooth_horiz, smooth_vert);
-            sub_laplacian(b2, wy, smooth_horiz, smooth_vert);
+            compute_smoothness(smooth_horiz, smooth_vert, 
+                               const_image_cast( uu ), const_image_cast( vv ), 
+                               dpsis_weight, get_deriv_flow(), params->half_alpha );
+            compute_data_and_match(a11, a12, a22, b1, b2, mask, du, dv, Ix, Iy, Iz, Ixx, Ixy, Iyy, Ixz, Iyz, params->half_delta_over3, params->half_gamma_over3);
+            sub_laplacian(b1, const_image_cast( wx ), const_image_cast( smooth_horiz ), const_image_cast( smooth_vert) );
+            sub_laplacian(b2, const_image_cast( wy ), const_image_cast( smooth_horiz ), const_image_cast( smooth_vert) );
             // solve system
-            sor_coupled(du, dv, a11, a12, a22, b1, b2, smooth_horiz, smooth_vert, params->niter_solver, params->sor_omega);
+            sor_coupled(du, dv, a11, a12, a22, b1, b2, smooth_horiz, smooth_vert, params->p->niter_solver, params->p->sor_omega);
             
             // update flow plus flow increment
             simdsf_t *uup = simdsf_ptrcast( uu->data ),
@@ -93,7 +153,7 @@ static void compute_one_level( image_t *wx,
     image_delete(uu); image_delete(vv);
     image_delete(a11); image_delete(a12); image_delete(a22);
     image_delete(b1); image_delete(b2);
-    image_delete(dpsis_weight);
+    image_delete( image_cast( dpsis_weight ) );
     color_image_delete(w_im2); 
     color_image_delete(Ix); color_image_delete(Iy); color_image_delete(Iz);
     color_image_delete(Ixx); color_image_delete(Ixy); color_image_delete(Iyy); color_image_delete(Ixz); color_image_delete(Iyz);
@@ -115,43 +175,42 @@ DLL_PUBLIC void variational_params_default(variational_params_t *params){
     params->niter_solver = 30;
     params->sor_omega = 1.9f;
 }
-  
+ 
+ 
 /* Compute a refinement of the optical flow (wx and wy are modified) between im1 and im2 */
 void variational(image_t *wx,
                  image_t *wy,
-                 const color_image_t *im1,
-                 const color_image_t *im2,
+                 const color_image_ct *im1,
+                 const color_image_ct *im2,
                  const variational_params_t *params)
 {
 
-    // initialize global variables
-    half_alpha = 0.5f*params->alpha;
-    half_gamma_over3 = params->gamma*0.5f/3.0f;
-    half_delta_over3 = params->delta*0.5f/3.0f;
-
-    const float deriv_filter[3] = {0.0f, -8.0f/12.0f, 1.0f/12.0f};
-    deriv = convolution_new(2, deriv_filter, 0);
-    float deriv_filter_flow[2] = {0.0f, -0.5f};
-    deriv_flow = convolution_new(1, deriv_filter_flow, 0);
+    // initialize variational variables
+    const variational_ext_params_t extParams = 
+    {
+        params,
+        0.5f*params->alpha, //half_alpha
+        params->gamma*0.5f/3.0f, // half_gamma_over3
+        params->delta*0.5f/3.0f  // half_delta_over3
+    };  
 
 
     // presmooth images
     int width = im1->width, height = im1->height, filter_size;
-    color_image_t *smooth_im1 = color_image_new(width, height), *smooth_im2 = color_image_new(width, height);
+    color_image_t *smooth_im1 = color_image_new(width, height), 
+                  *smooth_im2 = color_image_new(width, height);
     float *presmooth_filter = gaussian_filter(params->sigma, &filter_size);
-    convolution_t *presmoothing = convolution_new(filter_size, presmooth_filter, 1);
+    const convolution_ct *presmoothing = const_convolution_cast( convolution_new(filter_size, presmooth_filter, 1) );
     color_image_convolve_hv(smooth_im1, im1, presmoothing, presmoothing);
     color_image_convolve_hv(smooth_im2, im2, presmoothing, presmoothing); 
-    convolution_delete(presmoothing);
+    convolution_delete( convolution_cast( presmoothing ) );
     free(presmooth_filter);
     
-    compute_one_level(wx, wy, smooth_im1, smooth_im2, params);
+    compute_one_level(wx, wy, const_color_image_cast( smooth_im1), const_color_image_cast( smooth_im2 ), &extParams);
   
     // free memory
     color_image_delete(smooth_im1);
     color_image_delete(smooth_im2);
-    convolution_delete(deriv);
-    convolution_delete(deriv_flow);
 }
 
 

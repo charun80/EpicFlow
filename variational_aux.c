@@ -21,7 +21,7 @@ namespace ccore
 #define RECTIFY(a,b) (((a)<0) ? (0) : ( ((a)<(b)-1) ? (a) : ((b)-1) ) )
 
 /* warp a color image according to a flow. src is the input image, wx and wy, the input flow. dst is the warped image and mask contains 0 or 1 if the pixels goes outside/inside image boundaries */
-void image_warp(color_image_t *dst, image_t *mask, const color_image_t *src, const image_t *wx, const image_t *wy) {
+void image_warp(color_image_t *dst, image_t *mask, const color_image_ct *src, const image_ct *wx, const image_ct *wy) {
     int i, j, offset, x, y, x1, x2, y1, y2;
     float xx, yy, dx, dy;
     for(j=0 ; j<src->height ; j++){
@@ -58,7 +58,7 @@ void image_warp(color_image_t *dst, image_t *mask, const color_image_t *src, con
 }
 
 /* compute image first and second order spatio-temporal derivatives of a color image */
-void get_derivatives(const color_image_t *im1, const color_image_t *im2, const convolution_t *deriv,
+void get_derivatives(const color_image_ct *im1, const color_image_ct *im2, const convolution_ct *deriv,
 		     color_image_t *dx, color_image_t *dy, color_image_t *dt, 
 		     color_image_t *dxx, color_image_t *dxy, color_image_t *dyy, color_image_t *dxt, color_image_t *dyt) {
     // derivatives are computed on the mean of the first image and the warped second image
@@ -67,8 +67,8 @@ void get_derivatives(const color_image_t *im1, const color_image_t *im2, const c
     simdsf_t *tmp_im2p = simdsf_ptrcast( tmp_im2->c1 ),
                   *dtp = simdsf_ptrcast( dt->c1 );
                  
-    const simdsf_t *im1p = simdsf_ptrcast( im1->c1 ),
-                   *im2p = simdsf_ptrcast( im2->c1 );
+    const simdsf_t *im1p = simdsf_const_ptrcast( im1->c1 ),
+                   *im2p = simdsf_const_ptrcast( im2->c1 );
     
     const simdsf_t half = simdsf_init( 0.5f );
     
@@ -81,13 +81,13 @@ void get_derivatives(const color_image_t *im1, const color_image_t *im2, const c
     } 
     
     // compute all other derivatives
-    color_image_convolve_hv(dx, tmp_im2, deriv, NULL);
-    color_image_convolve_hv(dy, tmp_im2, NULL, deriv);
-    color_image_convolve_hv(dxx, dx, deriv, NULL);
-    color_image_convolve_hv(dxy, dx, NULL, deriv);
-    color_image_convolve_hv(dyy, dy, NULL, deriv);
-    color_image_convolve_hv(dxt, dt, deriv, NULL);
-    color_image_convolve_hv(dyt, dt, NULL, deriv);
+    color_image_convolve_hv(dx, const_color_image_cast( tmp_im2 ), deriv, NULL);
+    color_image_convolve_hv(dy, const_color_image_cast( tmp_im2 ), NULL, deriv);
+    color_image_convolve_hv(dxx, const_color_image_cast( dx ), deriv, NULL);
+    color_image_convolve_hv(dxy, const_color_image_cast( dx ), NULL, deriv);
+    color_image_convolve_hv(dyy, const_color_image_cast( dy ), NULL, deriv);
+    color_image_convolve_hv(dxt, const_color_image_cast( dt ), deriv, NULL);
+    color_image_convolve_hv(dyt, const_color_image_cast( dt ), NULL, deriv);
     // free memory
     color_image_delete(tmp_im2);
 }
@@ -96,7 +96,7 @@ void get_derivatives(const color_image_t *im1, const color_image_t *im2, const c
 /* It is represented as two images, the first one for horizontal smoothness, the second for vertical
    in dst_horiz, the pixel i,j represents the smoothness weight between pixel i,j and i,j+1
    in dst_vert, the pixel i,j represents the smoothness weight between pixel i,j and i+1,j */
-void compute_smoothness(image_t *dst_horiz, image_t *dst_vert, const image_t *uu, const image_t *vv, const image_t *dpsis_weight, const convolution_t *deriv_flow, const float half_alpha) {
+void compute_smoothness(image_t *dst_horiz, image_t *dst_vert, const image_ct *uu, const image_ct *vv, const image_ct *dpsis_weight, const convolution_ct *deriv_flow, const float half_alpha) {
   int w = uu->width, h = uu->height, s = uu->stride, i, j, offset;
   image_t *ux1 = image_new(w,h), *uy1 = image_new(w,h), *vx1 = image_new(w,h), *vy1 = image_new(w,h), 
     *ux2 = image_new(w,h), *uy2 = image_new(w,h), *vx2 = image_new(w,h), *vy2 = image_new(w,h);  
@@ -165,10 +165,12 @@ void compute_smoothness(image_t *dst_horiz, image_t *dst_vert, const image_t *uu
 
 
 /* sub the laplacian (smoothness term) to the right-hand term */
-void sub_laplacian(image_t *dst, const image_t *src, const image_t *weight_horiz, const image_t *weight_vert){
+void sub_laplacian(image_t *dst, const image_ct *src, const image_ct *weight_horiz, const image_ct *weight_vert){
     
     const int offsetline = src->stride-src->width;
-    float *src_ptr = src->data, *dst_ptr = dst->data, *weight_horiz_ptr = weight_horiz->data;
+    const float *src_ptr = src->data,
+                *weight_horiz_ptr = weight_horiz->data;
+          float *dst_ptr = dst->data;
     // horizontal filtering
     for( int j=src->height+1; --j; ) { // faster than for(j=0;j<src->height;j++)
         int i;
@@ -185,9 +187,9 @@ void sub_laplacian(image_t *dst, const image_t *src, const image_t *weight_horiz
         weight_horiz_ptr += offsetline+1;
     }
   
-    const simdsf_t   *wvp = simdsf_ptrcast( weight_vert->data ),
-                    *srcp = simdsf_ptrcast( src->data ),
-                  *srcp_s = simdsf_ptrcast( src->data + src->stride );
+    const simdsf_t   *wvp = simdsf_const_ptrcast( weight_vert->data ),
+                    *srcp = simdsf_const_ptrcast( src->data ),
+                  *srcp_s = simdsf_const_ptrcast( src->data + src->stride );
             
     simdsf_t  *dstp  = simdsf_ptrcast( dst->data ), 
              *dstp_s = simdsf_ptrcast( dst->data + src->stride );
@@ -202,13 +204,15 @@ void sub_laplacian(image_t *dst, const image_t *src, const image_t *weight_horiz
 }
 
 /* compute local smoothness weight as a sigmoid on image gradient*/
-image_t* compute_dpsis_weight(color_image_t *im, float coef, const convolution_t *deriv) {
-    image_t* lum = image_new(im->width, im->height), *lum_x = image_new(im->width, im->height), *lum_y = image_new(im->width, im->height);
+image_t* compute_dpsis_weight( const color_image_ct *im, float coef, const convolution_ct *deriv) {
+    image_t *lum = image_new(im->width, im->height), 
+          *lum_x = image_new(im->width, im->height),
+          *lum_y = image_new(im->width, im->height);
     
     // ocompute luminance
-    const simdsf_t *im1p = simdsf_ptrcast( im->c1 ),
-                   *im2p = simdsf_ptrcast( im->c2 ),
-                   *im3p = simdsf_ptrcast( im->c3 );
+    const simdsf_t *im1p = simdsf_const_ptrcast( im->c1 ),
+                   *im2p = simdsf_const_ptrcast( im->c2 ),
+                   *im3p = simdsf_const_ptrcast( im->c3 );
     
     simdsf_t *lump = simdsf_ptrcast( lum->data );
     
@@ -218,8 +222,8 @@ image_t* compute_dpsis_weight(color_image_t *im, float coef, const convolution_t
         lump+=1; im1p+=1; im2p+=1; im3p+=1;
     }
     // compute derivatives with five-point tencil
-    convolve_horiz(lum_x, lum, deriv);
-    convolve_vert(lum_y, lum, deriv);
+    convolve_horiz(lum_x, const_image_cast( lum ), deriv);
+    convolve_vert(lum_y, const_image_cast( lum ), deriv);
     
     // compute lum norm
     lump = simdsf_ptrcast( lum->data );

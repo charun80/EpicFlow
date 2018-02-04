@@ -19,8 +19,8 @@ DLL_PUBLIC size_t getArrayAlignment();
 
 
 DLL_PUBLIC void computeEpicFlow(
-    const ccore::color_image_t*        const f_inImg1_p,
-    const ccore::color_image_t*        const f_inImg2_p,
+    const ccore::color_image_ct*       const f_inImg1_p,
+    const ccore::color_image_ct*       const f_inImg2_p,
           ccore::float_image*          const f_edges_p,
     const ccore::float_image*          const f_matches_p,
     const epic::epic_params_t*         const f_epicParams_p,

@@ -18,6 +18,38 @@ namespace ccore
 #endif
 
 
+/********** const casting **********/
+
+const image_ct *const_image_cast( const image_t *image )
+{
+    return (image_ct*)(image);
+}
+
+const color_image_ct *const_color_image_cast( const color_image_t *image )
+{
+    return (color_image_ct*)(image);
+}
+
+const convolution_ct *const_convolution_cast( const convolution_t *conv )
+{
+    return (convolution_ct*)(conv);
+}
+
+
+image_t *image_cast( const image_ct *image )
+{
+    return (image_t*)(image);
+}
+
+color_image_t *color_image_cast( const color_image_ct *image )
+{
+    return (color_image_t*)(image);
+}
+
+convolution_t *convolution_cast( const convolution_ct *conv )
+{
+    return (convolution_t*)(conv);
+}
 
 
 /********** Create/Delete **********/
@@ -45,7 +77,7 @@ image_t *image_new(const int width, const int height){
 }
 
 /* allocate a new image and copy the content from src */
-image_t *image_cpy(const image_t *src){
+image_t *image_cpy(const image_ct *src){
     image_t *dst = image_new(src->width, src->height);
     memcpy(dst->data, src->data, src->stride*src->height*sizeof(float));
     return dst;
@@ -104,7 +136,7 @@ color_image_t *color_image_new(const int width, const int height)
 }
 
 /* allocate a new color image and copy the content from src */
-color_image_t *color_image_cpy(const color_image_t *src){
+color_image_t *color_image_cpy(const color_image_ct *src){
     color_image_t *dst = color_image_new(src->width, src->height);
     
     if (src->c1 == src->c2)
@@ -205,7 +237,7 @@ float *gaussian_filter(const float sigma, int *filter_order){
 }
 
 /* given half of the coef, compute the full coefficients and the accumulated coefficients */
-static void convolve_extract_coeffs(const int order, const float *half_coeffs, float *coeffs, float *coeffs_accu, const int even){
+void convolve_extract_coeffs(const int order, const float *half_coeffs, float *coeffs, float *coeffs_accu, const int even){
     int i;
     float accu = 0.0;
     if(even){
@@ -254,19 +286,20 @@ convolution_t *convolution_new(const int order, const float *half_coeffs, const 
     return conv;
 }
 
-static void convolve_vert_fast_3(image_t *dst, const image_t *src, const convolution_t *conv){
+static void convolve_vert_fast_3(image_t *dst, const image_ct *src, const convolution_ct *conv){
     const int iterline = (src->stride / NSimdFloats) + 1;
     const float *coeff = conv->coeffs;
     //const float *coeff_accu = conv->coeffs_accu;
-    simdsf_t *srcp = simdsf_ptrcast( src->data ), 
-             *dstp = simdsf_ptrcast( dst->data );
-    const simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
+    const simdsf_t *srcp = simdsf_const_ptrcast( src->data );
+          simdsf_t *dstp = simdsf_ptrcast( dst->data );
+    const simdsf_t *srcp_p1 = simdsf_const_ptrcast( src->data + src->stride );
+    
     int i;
     for(i=iterline ; --i ; ){ // first line
         *dstp = (coeff[0]+coeff[1])*(*srcp) + coeff[2]*(*srcp_p1);
         dstp+=1; srcp+=1; srcp_p1+=1;
     }
-    const simdsf_t* srcp_m1 = simdsf_ptrcast( src->data ); 
+    const simdsf_t* srcp_m1 = simdsf_const_ptrcast( src->data ); 
     for(i=src->height-1 ; --i ; ){ // others line
         int j;
         for(j=iterline ; --j ; ){
@@ -280,14 +313,14 @@ static void convolve_vert_fast_3(image_t *dst, const image_t *src, const convolu
     }  
 }
 
-static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolution_t *conv){
+static void convolve_vert_fast_5(image_t *dst, const image_ct *src, const convolution_ct *conv){
     const int iterline = (src->stride / NSimdFloats) + 1;
     const float *coeff = conv->coeffs;
     //const float *coeff_accu = conv->coeffs_accu;
-    simdsf_t *srcp = simdsf_ptrcast( src->data ), 
-             *dstp = simdsf_ptrcast( dst->data );
-    const simdsf_t *srcp_p1 = simdsf_ptrcast( src->data + src->stride );
-    const simdsf_t *srcp_p2 = simdsf_ptrcast( src->data + (2*src->stride) );
+    const simdsf_t *srcp = simdsf_const_ptrcast( src->data ); 
+          simdsf_t *dstp = simdsf_ptrcast( dst->data );
+    const simdsf_t *srcp_p1 = simdsf_const_ptrcast( src->data + src->stride );
+    const simdsf_t *srcp_p2 = simdsf_const_ptrcast( src->data + (2*src->stride) );
     
     int i;
     for(i=iterline ; --i ; ){ // first line
@@ -295,13 +328,13 @@ static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolu
         dstp+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
     }
     
-    const simdsf_t* srcp_m1 = simdsf_ptrcast( src->data );
+    const simdsf_t* srcp_m1 = simdsf_const_ptrcast( src->data );
     for(i=iterline ; --i ; ){ // second line
         *dstp = (coeff[0]+coeff[1])*(*srcp_m1) + coeff[2]*(*srcp) + coeff[3]*(*srcp_p1) + coeff[4]*(*srcp_p2);
         dstp+=1; srcp_m1+=1; srcp+=1; srcp_p1+=1; srcp_p2+=1;
     }   
     
-    const simdsf_t* srcp_m2 = simdsf_ptrcast( src->data );
+    const simdsf_t* srcp_m2 = simdsf_const_ptrcast( src->data );
     for(i=src->height-3 ; --i ; ){ // others line
         int j;
         for(j=iterline ; --j ; ){
@@ -320,11 +353,11 @@ static void convolve_vert_fast_5(image_t *dst, const image_t *src, const convolu
 }
 
 
-static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convolution_t *conv){
+static void convolve_horiz_fast_3(image_t *dst, const image_ct *src, const convolution_ct *conv){
     const int stride_minus_1 = src->stride-1;
     const int iterline = src->stride / NSimdFloats;
     const float *coeff = conv->coeffs;
-    const simdsf_t *srcp = simdsf_ptrcast( src->data ); 
+    const simdsf_t *srcp = simdsf_const_ptrcast( src->data ); 
           simdsf_t *dstp = simdsf_ptrcast( dst->data );
     
     // create shifted version of src
@@ -370,13 +403,13 @@ static void convolve_horiz_fast_3(image_t *dst, const image_t *src, const convol
 }
 
 
-static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convolution_t *conv){
+static void convolve_horiz_fast_5(image_t *dst, const image_ct *src, const convolution_ct *conv){
     const int stride_minus_1 = src->stride-1;
     const int stride_minus_2 = src->stride-2;
     const int iterline = src->stride / NSimdFloats;
     const float *coeff = conv->coeffs;
     
-    const simdsf_t *srcp = simdsf_ptrcast( src->data );
+    const simdsf_t *srcp = simdsf_const_ptrcast( src->data );
           simdsf_t *dstp = simdsf_ptrcast( dst->data );
     
     float *src_p1 = NULL;
@@ -431,7 +464,7 @@ static void convolve_horiz_fast_5(image_t *dst, const image_t *src, const convol
 
 
 /* perform an horizontal convolution of an image */
-void convolve_horiz(image_t *dest, const image_t *src, const convolution_t *conv){
+void convolve_horiz(image_t *dest, const image_ct *src, const convolution_ct *conv){
     if(conv->order==1){
         convolve_horiz_fast_3(dest,src,conv);
         return;
@@ -481,7 +514,7 @@ void convolve_horiz(image_t *dest, const image_t *src, const convolution_t *conv
 }
 
 /* perform a vertical convolution of an image */
-void convolve_vert(image_t *dest, const image_t *src, const convolution_t *conv){
+void convolve_vert(image_t *dest, const image_ct *src, const convolution_ct *conv){
     if(conv->order==1){
         convolve_vert_fast_3(dest,src,conv);
         return;
@@ -493,8 +526,8 @@ void convolve_vert(image_t *dest, const image_t *src, const convolution_t *conv)
           float *out = dest->data;
     int i0 = -conv->order;
     int i1 = +conv->order;
-    float *coeff = conv->coeffs + conv->order;
-    float *coeff_accu = conv->coeffs_accu + conv->order;
+    const float *coeff = conv->coeffs + conv->order;
+    const float *coeff_accu = conv->coeffs_accu + conv->order;
     int i, j, ii;
     float *o = out;
     const float *alast = in + src->stride * (src->height - 1);
@@ -557,14 +590,14 @@ void convolution_delete(convolution_t *conv){
 }
 
 /* perform horizontal and/or vertical convolution to a color image */
-void color_image_convolve_hv(color_image_t *dst, const color_image_t *src, const convolution_t *horiz_conv, const convolution_t *vert_conv){
+void color_image_convolve_hv(color_image_t *dst, const color_image_ct *src, const convolution_ct *horiz_conv, const convolution_ct *vert_conv){
     const int width = src->width, 
              height = src->height,
              stride = src->stride;
     // separate channels of images
-    const image_t src_red   = {width,height,stride,src->c1}, 
-                  src_green = {width,height,stride,src->c2},
-                  src_blue  = {width,height,stride,src->c3};
+    const image_ct src_red   = {width,height,stride,src->c1}, 
+                   src_green = {width,height,stride,src->c2},
+                   src_blue  = {width,height,stride,src->c3};
                     
     image_t   dst_red = {width,height,stride,dst->c1},
             dst_green = {width,height,stride,dst->c2}, 
@@ -584,11 +617,11 @@ void color_image_convolve_hv(color_image_t *dst, const color_image_t *src, const
         
         // perform convolution for each channel
         convolve_horiz(&tmp,&src_red,horiz_conv); 
-        convolve_vert(&dst_red,&tmp,vert_conv); 
+        convolve_vert(&dst_red, const_image_cast(&tmp), vert_conv); 
         convolve_horiz(&tmp,&src_green,horiz_conv);
-        convolve_vert(&dst_green,&tmp,vert_conv); 
+        convolve_vert(&dst_green, const_image_cast(&tmp), vert_conv); 
         convolve_horiz(&tmp,&src_blue,horiz_conv); 
-        convolve_vert(&dst_blue,&tmp,vert_conv);
+        convolve_vert(&dst_blue, const_image_cast(&tmp), vert_conv);
         free(tmp_data);
     } else if( (horiz_conv != NULL) && (vert_conv == NULL) ) { // only horizontal
         convolve_horiz(&dst_red,&src_red,horiz_conv);
@@ -606,7 +639,7 @@ void color_image_convolve_hv(color_image_t *dst, const color_image_t *src, const
 static inline float pow2( float f ) {return f*f;}
 
 /* return a new image in lab color space */
-color_image_t *rgb_to_lab(const color_image_t *im){
+color_image_t *rgb_to_lab(const color_image_ct *im){
 
     color_image_t *res = color_image_new(im->width, im->height);
     const int npix = im->stride*im->height;
@@ -641,7 +674,7 @@ color_image_t *rgb_to_lab(const color_image_t *im){
 }   
 
 /* compute the saliency of a given image */
-image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix ){
+image_t* saliency(const color_image_ct *im, float sigma_image, float sigma_matrix ){
     const int width = im->width;
     const int height = im->height; 
     
@@ -653,7 +686,7 @@ image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix
         float* const presmooth_filter = gaussian_filter(sigma_image, &filter_size);
         convolution_t* const presmoothing = convolution_new(filter_size, presmooth_filter, 1);
         
-        color_image_convolve_hv(sim, im, presmoothing, presmoothing);
+        color_image_convolve_hv(sim, im, const_convolution_cast( presmoothing ), const_convolution_cast( presmoothing ) );
         convolution_delete(presmoothing);
         free(presmooth_filter);
     }
@@ -663,11 +696,11 @@ image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix
                   *imy = color_image_new(width, height);
     {
         float deriv_filter[2] = {0.0f, -0.5f};
-        convolution_t* const deriv = convolution_new(1, deriv_filter, 0);
+        const convolution_ct* const deriv = const_convolution_cast( convolution_new(1, deriv_filter, 0) );
         
-        color_image_convolve_hv(imx, sim, deriv, NULL);
-        color_image_convolve_hv(imy, sim, NULL, deriv);
-        convolution_delete(deriv);
+        color_image_convolve_hv(imx, const_color_image_cast( sim ), deriv, NULL);
+        color_image_convolve_hv(imy, const_color_image_cast( sim ), NULL, deriv);
+        convolution_delete( convolution_cast( deriv ) );
     }
     
     // compute autocorrelation matrix
@@ -702,15 +735,15 @@ image_t* saliency(const color_image_t *im, float sigma_image, float sigma_matrix
     {
         int filter_size = -1;
         float* const smooth_filter = gaussian_filter(sigma_matrix, &filter_size);
-        convolution_t* const smoothing = convolution_new(filter_size, smooth_filter, 1);
+        const convolution_ct* const smoothing = const_convolution_cast( convolution_new(filter_size, smooth_filter, 1) );
         
-        convolve_horiz(tmp, imxx, smoothing);
-        convolve_vert(imxx, tmp, smoothing);
-        convolve_horiz(tmp, imxy, smoothing);
-        convolve_vert(imxy, tmp, smoothing);    
-        convolve_horiz(tmp, imyy, smoothing);
-        convolve_vert(imyy, tmp, smoothing);    
-        convolution_delete(smoothing);
+        convolve_horiz(tmp, const_image_cast( imxx ), smoothing);
+        convolve_vert(imxx, const_image_cast( tmp ), smoothing);
+        convolve_horiz(tmp, const_image_cast( imxy ), smoothing);
+        convolve_vert(imxy, const_image_cast( tmp ), smoothing);    
+        convolve_horiz(tmp, const_image_cast( imyy ), smoothing);
+        convolve_vert(imyy, const_image_cast( tmp ), smoothing);    
+        convolution_delete( convolution_cast( smoothing ) );
         free(smooth_filter);
     }
     

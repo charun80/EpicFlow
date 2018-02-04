@@ -152,6 +152,11 @@ inline static simdsf_t* simdsf_ptrcast( void* fptr )
     return ((simdsf_t*) fptr);
 }
 
+inline static const simdsf_t* simdsf_const_ptrcast( const void* fptr ) 
+{
+    return ((const simdsf_t*) fptr);
+}
+
 #pragma message( SIMD_MESSAGE )
 #undef SIMD_MESSAGE
 
